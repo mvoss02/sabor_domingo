@@ -81,12 +81,6 @@ export default function ScheduleTab() {
         The weekly rhythm
       </h1>
 
-      {status && (
-        <p style={{ fontSize: 13.5, fontWeight: 600, color: status.startsWith("Error") ? "#c8492a" : "#2e6b3e", margin: "0 0 14px" }}>
-          {status}
-        </p>
-      )}
-
       <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-start" }}>
         <div style={{ ...adminCard, flex: "1 1 300px" }}>
           <h2 style={{ fontWeight: 600, fontSize: 16, margin: "0 0 14px", color: "#c8492a" }}>Ordering</h2>
@@ -211,9 +205,16 @@ export default function ScheduleTab() {
         </div>
       </div>
 
-      <button type="button" onClick={save} style={{ ...adminButton, marginTop: 18 }}>
-        Save schedule
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 18, flexWrap: "wrap" }}>
+        <button type="button" onClick={save} style={adminButton}>
+          Save schedule
+        </button>
+        {status && (
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: status.startsWith("Error") ? "#c8492a" : "#2e6b3e" }}>
+            {status}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
