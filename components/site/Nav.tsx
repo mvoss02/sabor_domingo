@@ -88,7 +88,7 @@ export default function Nav() {
           className="sd-ticker-inner"
           style={{
             display: "inline-block",
-            animation: "sdrun 34s linear infinite",
+            animation: "sdrun 100s linear infinite",
             fontSize: 12,
             fontWeight: 600,
             letterSpacing: "0.14em",
