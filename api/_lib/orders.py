@@ -49,6 +49,7 @@ def create_checkout(payload: CheckoutPayload) -> str:
     totals = price_order([l.model_dump() for l in payload.lines], dishes, settings)
 
     order = client.table("orders").insert({
+        "status": "pending_payment",
         "name": payload.name, "email": payload.email, "address": payload.address,
         "notes": payload.notes, "delivery_day": payload.delivery_day,
         "subtotal": totals.subtotal_cents / 100, "fee": totals.fee_cents / 100,
