@@ -172,8 +172,11 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
             lineHeight: 1.6,
           }}
         >
-          <strong>Ordering is closed right now.</strong> The list opens again on {settings.open_day}{" "}
-          morning —{" "}
+          <strong>
+            {settings.closed_message || "Ordering is closed right now."}
+          </strong>{" "}
+          {!settings.closed_message && `The list opens again on ${settings.open_day} morning — `}
+          {settings.closed_message && "— "}
           <a href="#notify" style={{ color: "#c8492a", fontWeight: 600 }}>
             leave your email
           </a>{" "}

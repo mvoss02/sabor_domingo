@@ -21,6 +21,7 @@ export interface Settings {
   delivery_window: string;
   delivery_area: string;
   window_override: "auto" | "open" | "closed";
+  closed_message: string;
 }
 
 export interface HeroContent {

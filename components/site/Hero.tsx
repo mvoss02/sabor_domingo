@@ -15,8 +15,8 @@ export default function Hero({
 }) {
   const windowOpen = isWindowOpen(settings);
   const windowLabel = windowOpen
-    ? `Orders open until ${settings.close_day} ${settings.cutoff_time}`
-    : `Orders closed — back ${settings.open_day}`;
+    ? `Orders open until ${settings.close_day} ${String(settings.cutoff_time).slice(0, 5)}`
+    : settings.closed_message || `Orders closed — back ${settings.open_day}`;
   const feeLabel = `Order fee ${eur(settings.order_fee)}`;
   const areaLabel = settings.delivery_area;
   const maxPacksLabel = `${settings.max_packs} packs`;
