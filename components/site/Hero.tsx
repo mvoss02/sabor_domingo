@@ -70,7 +70,7 @@ export default function Hero({
               width: 8,
               height: 8,
               borderRadius: "50%",
-              background: "#2e6b3e",
+              background: windowOpen ? "#2e6b3e" : "#c8492a",
               display: "inline-block",
             }}
           ></span>
@@ -158,14 +158,12 @@ export default function Hero({
       </div>
       <div style={{ flex: "1 1 340px", minWidth: 0, position: "relative" }}>
         <div style={{ aspectRatio: "4 / 5", borderRadius: 18, overflow: "hidden" }}>
-          <div style={{ position: "absolute", inset: 0 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={heroImg}
-              alt="Sabor Domingo favourites"
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={heroImg}
+            alt="Sabor Domingo favourites"
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
         </div>
       </div>
     </section>

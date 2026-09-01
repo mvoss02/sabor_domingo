@@ -35,7 +35,7 @@ export default function Nav() {
             How it works
           </a>
           <a href="#us" className="sd-nav-link" style={{ fontSize: 13.5, fontWeight: 500, color: "#fdf6e8" }}>
-            Us
+            About us
           </a>
           <a href="#business" className="sd-nav-link" style={{ fontSize: 13.5, fontWeight: 500, color: "#fdf6e8" }}>
             Events

@@ -67,8 +67,8 @@ function buildWeek(settings: Settings) {
         short: SHORT[day as keyof typeof SHORT],
         title: "Orders open",
         note,
-        bg: "#4a1519",
-        fg: "#fdf6e8",
+        bg: "#ece0cb",
+        fg: "#3d1f18",
       };
     }
     return {
@@ -144,7 +144,6 @@ export default function Rhythm({ settings }: { settings: Settings }) {
                 minHeight: 140,
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: "space-between",
                 background: day.bg,
                 color: day.fg,
               }}
@@ -156,6 +155,7 @@ export default function Rhythm({ settings }: { settings: Settings }) {
                   letterSpacing: "0.14em",
                   textTransform: "uppercase",
                   opacity: 0.75,
+                  marginBottom: 12,
                 }}
               >
                 {day.short}
@@ -180,7 +180,7 @@ export default function Rhythm({ settings }: { settings: Settings }) {
           }}
         >
           <div style={{ flex: "1 1 230px", minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 32, color: "#e8724f", lineHeight: 1, letterSpacing: "-0.02em" }}>
+            <div style={{ fontWeight: 700, fontSize: 32, color: "#ece0cb", lineHeight: 1, letterSpacing: "-0.02em" }}>
               01
             </div>
             <h3 style={{ fontWeight: 600, fontSize: 19, margin: "10px 0 8px" }}>
@@ -193,7 +193,7 @@ export default function Rhythm({ settings }: { settings: Settings }) {
             </p>
           </div>
           <div style={{ flex: "1 1 230px", minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 32, color: "#f2a63b", lineHeight: 1, letterSpacing: "-0.02em" }}>
+            <div style={{ fontWeight: 700, fontSize: 32, color: "#e8724f", lineHeight: 1, letterSpacing: "-0.02em" }}>
               02
             </div>
             <h3 style={{ fontWeight: 600, fontSize: 19, margin: "10px 0 8px" }}>
