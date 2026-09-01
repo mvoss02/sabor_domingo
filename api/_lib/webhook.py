@@ -2,7 +2,11 @@ from api._lib.db import get_client
 
 
 def on_order_paid(order: dict, items: list[dict]) -> None:
-    """Replaced with real email sending in emails task."""
+    from api._lib.emails import send_order_emails
+    try:
+        send_order_emails(order, items)
+    except Exception as e:  # email must never fail the webhook
+        print(f"email send failed for order {order.get('id')}: {e}")
 
 
 def handle_event(event: dict) -> str:
