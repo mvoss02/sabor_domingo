@@ -15,7 +15,7 @@ A finished clickable prototype exists (Claude Design export, `Sabor Domingo land
 - **Backend**: FastAPI as Python serverless functions, same Vercel project (official Next.js + FastAPI pattern, rewrite `/api/py/*` → Python). Verify pattern at setup time.
 - **Data/auth/files**: Supabase (Postgres, Auth, Storage).
 - **Payments**: Stripe Checkout (hosted page), iDEAL + cards. Webhook confirms payment.
-- **Email**: Resend free tier.
+- **Email**: Brevo (transactional REST API, free tier 300/day). Changed from Resend 2026-09-01: Moritz has a Brevo account.
 
 ## Architecture
 
@@ -73,9 +73,9 @@ Supabase Auth login (email + password, two pre-created accounts). Tabs mirror pr
 - **Content** — editable text fields (hero copy, FAQ).
 - **Inquiries** — events/business submissions.
 
-## Email (Resend)
+## Email (Brevo)
 
-On order `paid`: confirmation to customer (dishes, delivery day, reheating note), notification to Maca + Clau. Events inquiry: notification to Maca + Clau. Monday digest: deferred (orders tab covers it).
+On order `paid`: confirmation to customer (dishes, delivery day, reheating note), notification to Maca + Clau. Events inquiry: notification to Maca + Clau. Monday digest: deferred (orders tab covers it). Sender address must be verified in the Brevo dashboard (`EMAIL_FROM`).
 
 ## Testing
 
@@ -85,7 +85,7 @@ On order `paid`: confirmation to customer (dishes, delivery day, reheating note)
 
 ## Deploy
 
-Vercel: preview deployments per branch, production on main. Secrets (Supabase service key, Stripe secret + webhook secret, Resend key) as Vercel env vars; anon key + URL public. Custom domain later.
+Vercel: preview deployments per branch, production on main. Secrets (Supabase service key, Stripe secret + webhook secret, Brevo key) as Vercel env vars; anon key + URL public. Custom domain later.
 
 ## Out of scope (v1)
 

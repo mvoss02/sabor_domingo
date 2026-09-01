@@ -1,0 +1,133 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #f6eee0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Poppins, system-ui, sans-serif;
+  color: #3d1f18;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+a {
+  color: #c8492a;
+  text-decoration: none;
+}
+
+a:hover {
+  color: #5e1d22;
+  text-decoration: underline;
+}
+
+input,
+select,
+button,
+textarea {
+  font-family: inherit;
+}
+
+@keyframes sdrun {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Hover-state utility classes — the design reference expresses these via
+   an inline `style-hover` attribute, which has no equivalent in JSX inline
+   styles. Ported here as the closest faithful equivalent. */
+
+.sd-nav-link:hover {
+  color: #f2a63b;
+}
+
+.sd-cta-order:hover {
+  background: #f2a63b !important;
+  color: #5e1d22 !important;
+  text-decoration: none;
+}
+
+.sd-cta-dark:hover {
+  background: #c8492a !important;
+  text-decoration: none;
+}
+
+.sd-underline-link:hover {
+  color: #c8492a;
+  text-decoration: none;
+}
+
+.sd-ig-link-footer:hover {
+  color: #f2a63b;
+}
+
+.sd-ig-link-bios:hover {
+  color: #fdf6e8;
+}
+
+.sd-admin-link:hover {
+  border-color: #f2a63b;
+  color: #f2a63b;
+}
+
+.sd-cta-quote:hover:not(:disabled) {
+  background: #5e1d22 !important;
+}
+
+.sd-notify-input:focus {
+  outline: none;
+  border-color: #c8492a !important;
+  box-shadow: 0 0 0 3px rgba(200, 73, 42, 0.25);
+}
+
+.sd-qty-dec:hover { background: #ece0cb !important; }
+.sd-qty-inc:hover { background: #5e1d22 !important; }
+.sd-pay-btn:not(:disabled):hover { background: #f2a63b !important; color: #5e1d22 !important; }
+
+.sd-dark-field:focus {
+  outline: none;
+  border-color: #f2a63b !important;
+  box-shadow: 0 0 0 3px rgba(242, 166, 59, 0.25);
+}
+
+/* Hero grid: wide = CTA under text; middle = CTA spans below both; narrow = stacked */
+.sd-hero {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  grid-template-areas:
+    "text image"
+    "cta image";
+  column-gap: clamp(24px, 4vw, 52px);
+  align-items: start;
+}
+.sd-hero-text { grid-area: text; min-width: 0; }
+.sd-hero-img { grid-area: image; min-width: 0; }
+.sd-hero-cta { grid-area: cta; min-width: 0; }
+@media (max-width: 1120px) {
+  .sd-hero {
+    grid-template-areas:
+      "text image"
+      "cta cta";
+  }
+  .sd-hero-cta { margin-top: 26px; }
+}
+@media (max-width: 720px) {
+  .sd-hero {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "text"
+      "image"
+      "cta";
+  }
+  .sd-hero-img { margin-top: 22px; }
+  .sd-hero-cta { margin-top: 22px; }
+}
