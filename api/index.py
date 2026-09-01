@@ -1,7 +1,10 @@
-from fastapi import FastAPI, HTTPException
+import stripe
+from fastapi import FastAPI, HTTPException, Request
 
+from api._lib.config import env
 from api._lib.orders import CheckoutPayload, WindowClosed, create_checkout
 from api._lib.pricing import CartError
+from api._lib.webhook import handle_event
 
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
@@ -20,3 +23,14 @@ def checkout(payload: CheckoutPayload):
     except CartError as e:
         raise HTTPException(status_code=400, detail=e.message)
     return {"url": url}
+
+
+@app.post("/api/py/stripe-webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, env("STRIPE_WEBHOOK_SECRET"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    return {"result": handle_event(event.to_dict() if hasattr(event, "to_dict") else event)}
