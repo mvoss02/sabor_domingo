@@ -95,7 +95,7 @@ export default function Nav() {
             textTransform: "uppercase",
           }}
         >
-          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+          {[...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
             <span key={i}>
               <span style={{ padding: "0 16px" }}>{item}</span>
               <span style={{ color: "#f2a63b" }}>✦</span>

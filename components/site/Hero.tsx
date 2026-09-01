@@ -146,6 +146,7 @@ export default function Hero({
       </div>
       <div className="sd-hero-img" style={{ position: "relative" }}>
         <div
+          className="sd-hero-imgbox"
           style={{
             aspectRatio: "4 / 5",
             borderRadius: 18,

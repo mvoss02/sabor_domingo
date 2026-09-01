@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { imageUrl } from "@/lib/content";
 import { eur, isWindowOpen } from "@/lib/window";
 import type { Dish, Settings } from "@/lib/types";
@@ -36,6 +36,8 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
     notes: "",
   });
   const [deliveryDay, setDeliveryDay] = useState(settings.delivery_days[0] ?? "Monday");
+  const [houseNr, setHouseNr] = useState("");
+  const [lookup, setLookup] = useState<"idle" | "loading" | "found" | "notfound">("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,9 +56,45 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
   const total = totalPacks > 0 ? subtotal + settings.order_fee : 0;
   const packsLeft = settings.max_packs - totalPacks;
   const postalOk = /^\d{4}\s?[A-Za-z]{2}$/.test(form.postal_code.trim());
-  const formComplete =
-    form.name.trim() && form.email.trim() && form.address.trim() && postalOk && form.phone.trim().length >= 6;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim());
+  const phoneOk = /^\+?[0-9][0-9 \-()]{5,}$/.test(form.phone.trim());
+  const formComplete = form.name.trim() && emailOk && form.address.trim() && postalOk && phoneOk;
   const canSubmit = windowOpen && totalPacks > 0 && !!formComplete && !submitting;
+
+  // Dutch address autofill: postcode + house number -> street via PDOK Locatieserver
+  // (free government geocoding API, no key). Failure just leaves manual typing.
+  useEffect(() => {
+    if (!postalOk || !houseNr.trim()) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setLookup("loading");
+      try {
+        // query with the base number only (hyphen suffixes like 41-2 confuse
+        // the fuzzy match); the full house number is composed back in below
+        const baseNr = houseNr.trim().match(/^\d+/)?.[0] ?? houseNr.trim();
+        const q = `${form.postal_code.replace(/\s+/g, "")} ${baseNr}`;
+        const res = await fetch(
+          `https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?q=${encodeURIComponent(q)}&fq=type:adres&rows=1`
+        );
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        const doc = data?.response?.docs?.[0];
+        if (cancelled) return;
+        if (doc?.straatnaam) {
+          setForm((f) => ({ ...f, address: `${doc.straatnaam} ${houseNr.trim()}` }));
+          setLookup("found");
+        } else {
+          setLookup("notfound");
+        }
+      } catch {
+        if (!cancelled) setLookup("notfound");
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [form.postal_code, houseNr, postalOk]);
 
   function add(dishId: string, delta: number) {
     const key = `${dishId}|${packSize}`;
@@ -512,17 +550,6 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                 style={fieldStyle}
               />
             </label>
-            <label style={{ display: "block" }}>
-              <span style={labelStyle}>Address</span>
-              <input
-                className="sd-dark-field"
-                type="text"
-                value={form.address}
-                onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-                placeholder="Street and house number"
-                style={fieldStyle}
-              />
-            </label>
             <div style={{ display: "flex", gap: 10 }}>
               <label style={{ display: "block", flex: "1 1 0", minWidth: 0 }}>
                 <span style={labelStyle}>Postal code</span>
@@ -548,16 +575,65 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                 )}
               </label>
               <label style={{ display: "block", flex: "1 1 0", minWidth: 0 }}>
-                <span style={labelStyle}>Phone</span>
+                <span style={labelStyle}>House number</span>
                 <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                  placeholder="+31 6 12345678"
+                  className="sd-dark-field"
+                  type="text"
+                  value={houseNr}
+                  onChange={(e) => setHouseNr(e.target.value)}
+                  placeholder="41-2"
+                  maxLength={12}
                   style={fieldStyle}
                 />
               </label>
             </div>
+            <label style={{ display: "block" }}>
+              <span style={labelStyle}>Address</span>
+              <input
+                className="sd-dark-field"
+                type="text"
+                value={form.address}
+                onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                placeholder="Fills in from postcode + number"
+                maxLength={500}
+                style={fieldStyle}
+              />
+              {postalOk && houseNr.trim() !== "" && lookup === "loading" && (
+                <span style={{ display: "block", fontSize: 11.5, color: "#a1806f", marginTop: 5 }}>
+                  Looking up your street…
+                </span>
+              )}
+              {postalOk && houseNr.trim() !== "" && lookup === "found" && form.address && (
+                <span style={{ display: "block", fontSize: 11.5, color: "#7fae86", marginTop: 5 }}>
+                  ✓ {form.address}
+                </span>
+              )}
+              {postalOk && houseNr.trim() !== "" && lookup === "notfound" && (
+                <span style={{ display: "block", fontSize: 11.5, color: "#f2a63b", marginTop: 5, lineHeight: 1.4 }}>
+                  Couldn&rsquo;t find that address — type your street and number.
+                </span>
+              )}
+            </label>
+            <label style={{ display: "block" }}>
+              <span style={labelStyle}>Phone</span>
+              <input
+                className="sd-dark-field"
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                placeholder="+31 6 12345678"
+                maxLength={40}
+                style={{
+                  ...fieldStyle,
+                  borderColor: form.phone && !phoneOk ? "#f2a63b" : "#7c3a35",
+                }}
+              />
+              {form.phone && !phoneOk && (
+                <span style={{ display: "block", fontSize: 11.5, color: "#f2a63b", marginTop: 5, lineHeight: 1.4 }}>
+                  Digits only (spaces OK), at least 6 — like +31 6 12345678
+                </span>
+              )}
+            </label>
             <label style={{ display: "block" }}>
               <span style={labelStyle}>Email</span>
               <input
@@ -566,8 +642,17 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 placeholder="hola@sabordomingo.com"
-                style={fieldStyle}
+                maxLength={200}
+                style={{
+                  ...fieldStyle,
+                  borderColor: form.email && !emailOk ? "#f2a63b" : "#7c3a35",
+                }}
               />
+              {form.email && !emailOk && (
+                <span style={{ display: "block", fontSize: 11.5, color: "#f2a63b", marginTop: 5, lineHeight: 1.4 }}>
+                  That doesn&rsquo;t look like an email address yet.
+                </span>
+              )}
             </label>
             <label style={{ display: "block" }}>
               <span style={labelStyle}>Notes (allergies, spice level)</span>
