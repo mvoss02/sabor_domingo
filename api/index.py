@@ -55,3 +55,15 @@ def inquiry(payload: InquiryPayload):
     except Exception as e:
         print(f"inquiry email failed: {e}")
     return {"ok": True}
+
+
+@app.get("/api/py/order-status")
+def order_status(session_id: str):
+    rows = (get_client().table("orders")
+            .select("status, ref_num, delivery_day, total")
+            .eq("stripe_session_id", session_id).execute().data)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Order not found")
+    o = rows[0]
+    return {"status": o["status"], "ref": f"#SD-{o['ref_num']}",
+            "delivery_day": o["delivery_day"], "total": o["total"]}
