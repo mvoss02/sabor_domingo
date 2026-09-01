@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { imageUrl } from "@/lib/content";
 import { adminButton, adminCard, adminInput, adminLabel } from "@/components/admin/ui";
 import type { Dish, Settings } from "@/lib/types";
 
@@ -47,6 +48,18 @@ export default function MenuTab() {
     if (error) return setStatus(`Error: ${error.message}`);
     setDishes((ds) => ds.filter((x) => x.id !== d.id));
     setStatus(`Deleted “${d.name}”`);
+  }
+
+  async function uploadPhoto(d: Dish, file: File) {
+    setStatus("Uploading…");
+    const ext = file.name.split(".").pop() ?? "png";
+    const path = `${d.id}-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("images").upload(path, file);
+    if (error) return setStatus(`Upload failed: ${error.message}`);
+    const { error: e2 } = await supabase.from("dishes").update({ image_path: path }).eq("id", d.id);
+    if (e2) return setStatus(`Save failed: ${e2.message}`);
+    editDish(d.id, { image_path: path });
+    setStatus(`Photo saved for “${d.name}”`);
   }
 
   async function savePricing() {
@@ -96,7 +109,38 @@ export default function MenuTab() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
         {dishes.map((d) => (
-          <div key={d.id} style={adminCard}>
+          <div key={d.id} style={{ ...adminCard, display: "flex", flexWrap: "wrap", gap: 16 }}>
+            <div style={{ flex: "0 0 auto", width: 120 }}>
+              <div
+                style={{
+                  width: 120,
+                  height: 120,
+                  borderRadius: 10,
+                  overflow: "hidden",
+                  background: "repeating-linear-gradient(135deg, #ece0cb 0 8px, #f6eee0 8px 16px)",
+                  marginBottom: 8,
+                }}
+              >
+                {imageUrl(d.image_path) && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imageUrl(d.image_path)!}
+                    alt={d.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadPhoto(d, f);
+                }}
+                style={{ fontSize: 11.5, color: "#5e1d22", width: 120 }}
+              />
+            </div>
+            <div style={{ flex: "1 1 300px", minWidth: 0 }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
               <label style={{ flex: "2 1 220px", minWidth: 0 }}>
                 <span style={adminLabel}>Dish name</span>
@@ -148,6 +192,7 @@ export default function MenuTab() {
               >
                 Delete
               </button>
+            </div>
             </div>
           </div>
         ))}
