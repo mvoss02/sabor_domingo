@@ -32,11 +32,12 @@ export default function NotifySignup({ compact = false }: { compact?: boolean })
   return (
     <form onSubmit={submit} style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
       <input
+        className="sd-notify-input"
         type="email"
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@email.com"
+        placeholder="hola@sabordomingo.com"
         style={{
           flex: "1 1 180px",
           minWidth: 0,

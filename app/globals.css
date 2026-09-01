@@ -82,3 +82,9 @@ textarea {
 .sd-cta-quote:hover:not(:disabled) {
   background: #5e1d22 !important;
 }
+
+.sd-notify-input:focus {
+  outline: none;
+  border-color: #c8492a !important;
+  box-shadow: 0 0 0 3px rgba(200, 73, 42, 0.25);
+}
