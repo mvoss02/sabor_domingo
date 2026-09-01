@@ -174,3 +174,7 @@ textarea {
   .sd-stepper .sd-qty-dec, .sd-stepper .sd-qty-inc { width: 38px !important; height: 38px !important; font-size: 19px !important; }
   .sd-stepper .sd-qty-count { font-size: 15px !important; }
 }
+
+@media (max-width: 720px) {
+  .sd-hero-imgbox { margin: 0 auto !important; }
+}
