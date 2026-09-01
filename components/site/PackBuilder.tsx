@@ -132,33 +132,6 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
         margin: "0 auto",
       }}
     >
-      <p
-        style={{
-          fontFamily: "'Caveat Brush', cursive",
-          fontSize: "clamp(21px, 2.8vw, 28px)",
-          color: "#c8492a",
-          margin: "0 0 6px",
-        }}
-      >
-        arma tu paquete
-      </p>
-      <h2
-        style={{
-          fontWeight: 700,
-          fontSize: "clamp(30px, 5.5vw, 52px)",
-          lineHeight: 1.04,
-          letterSpacing: "-0.035em",
-          margin: "0 0 10px",
-          color: "#5e1d22",
-        }}
-      >
-        Build your meal pack
-      </h2>
-      <p style={{ fontSize: 15.5, color: "#6a4a3f", maxWidth: "56ch", margin: "0 0 30px", lineHeight: 1.65 }}>
-        Two pack sizes, three dishes each week. Mix and match up to {settings.max_packs} packs — one
-        pack feeds one person for the week, or a couple for a few dinners.
-      </p>
-
       {!windowOpen && (
         <div
           style={{
@@ -186,6 +159,32 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "clamp(18px, 3vw, 40px)", alignItems: "flex-start" }}>
         <div style={{ flex: "3 1 340px", minWidth: 0 }}>
+          <p
+            style={{
+              fontFamily: "'Caveat Brush', cursive",
+              fontSize: "clamp(21px, 2.8vw, 28px)",
+              color: "#c8492a",
+              margin: "0 0 6px",
+            }}
+          >
+            arma tu paquete
+          </p>
+          <h2
+            style={{
+              fontWeight: 700,
+              fontSize: "clamp(30px, 5.5vw, 52px)",
+              lineHeight: 1.04,
+              letterSpacing: "-0.035em",
+              margin: "0 0 10px",
+              color: "#5e1d22",
+            }}
+          >
+            Build your meal pack
+          </h2>
+          <p style={{ fontSize: 15.5, color: "#6a4a3f", maxWidth: "56ch", margin: "0 0 30px", lineHeight: 1.65 }}>
+            Two pack sizes, three dishes each week. Mix and match up to {settings.max_packs} packs —
+            one pack feeds one person for the week, or a couple for a few dinners.
+          </p>
           <h3
             style={{
               fontWeight: 600,

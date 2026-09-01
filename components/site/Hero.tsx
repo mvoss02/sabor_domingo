@@ -24,17 +24,14 @@ export default function Hero({
 
   return (
     <section
+      className="sd-hero"
       style={{
         padding: "clamp(20px, 3.5vw, 40px) clamp(16px, 4vw, 44px) clamp(30px, 5vw, 64px)",
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "clamp(24px, 4vw, 52px)",
-        alignItems: "flex-start",
         maxWidth: 1360,
         margin: "0 auto",
       }}
     >
-      <div style={{ flex: "1 1 340px", minWidth: 0 }}>
+      <div className="sd-hero-text">
         <div
           style={{
             display: "inline-flex",
@@ -98,6 +95,8 @@ export default function Hero({
         >
           {hero.body}
         </p>
+      </div>
+      <div className="sd-hero-cta">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <a
             href="#order"
@@ -145,7 +144,7 @@ export default function Hero({
           <span>Max {maxPacksLabel}</span>
         </div>
       </div>
-      <div style={{ flex: "1 1 340px", minWidth: 0, position: "relative" }}>
+      <div className="sd-hero-img" style={{ position: "relative" }}>
         <div
           style={{
             aspectRatio: "4 / 5",
