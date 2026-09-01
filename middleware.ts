@@ -13,7 +13,7 @@ async function sha256Hex(s: string): Promise<string> {
     .join("");
 }
 
-function gatePage(error = ""): Response {
+function gatePage(error = "", next = "/"): Response {
   const html = `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>Sabor Domingo</title></head>
@@ -21,6 +21,7 @@ function gatePage(error = ""): Response {
 <form method="POST" action="/gate" style="max-width:340px;width:100%;padding:24px;text-align:center">
 <div style="font-weight:700;font-size:26px;color:#fdf6e8;letter-spacing:0.08em">SABOR</div>
 <div style="font-size:15px;color:#f2a63b;margin:2px 0 24px">Domingo &middot; coming soon</div>
+<input type="hidden" name="next" value="${next.replace(/"/g, "")}">
 <input type="password" name="pw" placeholder="Password" autofocus
  style="width:100%;box-sizing:border-box;padding:14px 12px;border-radius:9px;border:1px solid #7c3a35;background:#4a1519;color:#fdf6e8;font-size:15px;margin-bottom:12px">
 <button type="submit" style="width:100%;padding:15px;border-radius:999px;border:none;background:#c8492a;color:#fdf6e8;font-weight:600;font-size:15px;cursor:pointer">Enter</button>
@@ -44,8 +45,11 @@ export async function middleware(req: NextRequest) {
 
   if (pathname === "/gate" && req.method === "POST") {
     const form = await req.formData().catch(() => null);
+    const rawNext = String(form?.get("next") ?? "/");
+    // only same-site relative paths — anything else falls back to home
+    const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
     if (form?.get("pw") === password) {
-      const res = NextResponse.redirect(new URL("/", req.url), 303);
+      const res = NextResponse.redirect(new URL(next, req.url), 303);
       res.cookies.set("sd_demo", expected, {
         httpOnly: true,
         secure: true,
@@ -55,8 +59,8 @@ export async function middleware(req: NextRequest) {
       });
       return res;
     }
-    return gatePage("Wrong password — try again");
+    return gatePage("Wrong password — try again", next);
   }
 
-  return gatePage();
+  return gatePage("", req.nextUrl.pathname + req.nextUrl.search);
 }
