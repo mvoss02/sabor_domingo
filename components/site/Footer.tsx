@@ -52,24 +52,6 @@ export default function Footer() {
           >
             Instagram
           </a>
-          <a
-            href="/admin"
-            className="sd-admin-link"
-            style={{
-              background: "none",
-              border: "1px solid #7c3a35",
-              color: "#a1806f",
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              padding: "9px 15px",
-              borderRadius: 999,
-              display: "inline-block",
-            }}
-          >
-            Admin login
-          </a>
         </div>
       </div>
     </footer>

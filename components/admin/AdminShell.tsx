@@ -3,16 +3,20 @@ import { useState, type ComponentType } from "react";
 import { supabase } from "@/lib/supabase";
 import MenuTab from "@/components/admin/MenuTab";
 import ScheduleTab from "@/components/admin/ScheduleTab";
+import OrdersTab from "@/components/admin/OrdersTab";
+import ImagesTab from "@/components/admin/ImagesTab";
+import ContentTab from "@/components/admin/ContentTab";
+import InquiriesTab from "@/components/admin/InquiriesTab";
 
 export type TabKey = "menu" | "orders" | "schedule" | "images" | "content" | "inquiries";
 
 const TABS: { key: TabKey; label: string; component: ComponentType | null }[] = [
   { key: "menu", label: "Menu", component: MenuTab },
-  { key: "orders", label: "Orders", component: null },
+  { key: "orders", label: "Orders", component: OrdersTab },
   { key: "schedule", label: "Schedule", component: ScheduleTab },
-  { key: "images", label: "Images", component: null },
-  { key: "content", label: "Content", component: null },
-  { key: "inquiries", label: "Inquiries", component: null },
+  { key: "images", label: "Images", component: ImagesTab },
+  { key: "content", label: "Content", component: ContentTab },
+  { key: "inquiries", label: "Inquiries", component: InquiriesTab },
 ];
 
 export default function AdminShell() {
