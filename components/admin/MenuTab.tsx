@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { imageUrl } from "@/lib/content";
+import ImagePicker from "@/components/admin/ImagePicker";
 import { adminButton, adminCard, adminInput, adminLabel } from "@/components/admin/ui";
 import type { Dish, Settings } from "@/lib/types";
 
@@ -59,8 +60,12 @@ export default function MenuTab() {
     const path = `${d.id}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("images").upload(path, file);
     if (error) return setStatus(`Upload failed: ${error.message}`);
-    const { error: e2 } = await supabase.from("dishes").update({ image_path: path }).eq("id", d.id);
-    if (e2) return setStatus(`Save failed: ${e2.message}`);
+    await assignPhoto(d, path);
+  }
+
+  async function assignPhoto(d: Dish, path: string) {
+    const { error } = await supabase.from("dishes").update({ image_path: path }).eq("id", d.id);
+    if (error) return setStatus(`Save failed: ${error.message}`);
     editDish(d.id, { image_path: path });
     setStatus(`Photo saved for “${d.name}”`);
   }
@@ -152,6 +157,7 @@ export default function MenuTab() {
                 }}
                 style={{ fontSize: 11.5, color: "#5e1d22", width: 120 }}
               />
+              <ImagePicker onPick={(path) => assignPhoto(d, path)} />
             </div>
             <div style={{ flex: "1 1 300px", minWidth: 0 }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>

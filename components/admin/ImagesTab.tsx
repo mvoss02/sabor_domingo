@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { imageUrl } from "@/lib/content";
 import { adminCard, adminLabel } from "@/components/admin/ui";
+import ImagePicker from "@/components/admin/ImagePicker";
 import type { ImageSlots } from "@/lib/types";
 
 const NAMED_SLOTS: { key: keyof ImageSlots; label: string }[] = [
@@ -30,11 +31,15 @@ export default function ImagesTab() {
     const path = `${slotKey}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("images").upload(path, file);
     if (error) return setStatus(`Upload failed: ${error.message}`);
+    await assign(slotKey, path);
+  }
+
+  async function assign(slotKey: string, path: string) {
     const next = { ...slots, [slotKey]: path };
-    const { error: e2 } = await supabase.from("site_content").update({ value: next }).eq("key", "images");
-    if (e2) return setStatus(`Save failed: ${e2.message}`);
+    const { error } = await supabase.from("site_content").update({ value: next }).eq("key", "images");
+    if (error) return setStatus(`Save failed: ${error.message}`);
     setSlots(next);
-    setStatus("Uploaded — the site updates within a minute");
+    setStatus("Saved — the site updates within a minute");
   }
 
   const slotCard = (key: string, label: string, path: string | null) => {
@@ -66,6 +71,7 @@ export default function ImagesTab() {
           }}
           style={{ fontSize: 12.5, color: "#5e1d22", maxWidth: "100%" }}
         />
+        <ImagePicker onPick={(path) => assign(key, path)} />
       </div>
     );
   };
