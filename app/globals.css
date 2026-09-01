@@ -1,49 +1,84 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html {
-  height: 100%;
-}
-
 html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+  background: #f6eee0;
 }
 
 * {
   box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+}
+
+body {
+  font-family: Poppins, system-ui, sans-serif;
+  color: #3d1f18;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 a {
-  color: inherit;
+  color: #c8492a;
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+a:hover {
+  color: #5e1d22;
+  text-decoration: underline;
+}
+
+input,
+select,
+button,
+textarea {
+  font-family: inherit;
+}
+
+@keyframes sdrun {
+  from {
+    transform: translateX(0);
   }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Hover-state utility classes — the design reference expresses these via
+   an inline `style-hover` attribute, which has no equivalent in JSX inline
+   styles. Ported here as the closest faithful equivalent. */
+
+.sd-nav-link:hover {
+  color: #f2a63b;
+}
+
+.sd-cta-order:hover {
+  background: #f2a63b !important;
+  color: #5e1d22 !important;
+  text-decoration: none;
+}
+
+.sd-cta-dark:hover {
+  background: #c8492a !important;
+  text-decoration: none;
+}
+
+.sd-underline-link:hover {
+  color: #c8492a;
+  text-decoration: none;
+}
+
+.sd-ig-link-footer:hover {
+  color: #f2a63b;
+}
+
+.sd-ig-link-bios:hover {
+  color: #fdf6e8;
+}
+
+.sd-admin-link:hover {
+  border-color: #f2a63b;
+  color: #f2a63b;
+}
+
+.sd-cta-quote:hover:not(:disabled) {
+  background: #5e1d22 !important;
 }
