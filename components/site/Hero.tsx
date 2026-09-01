@@ -34,7 +34,7 @@ export default function Hero({
   const feeLabel = `Order fee ${eur(settings.order_fee)}`;
   const areaLabel = settings.delivery_area;
   const maxPacksLabel = `${settings.max_packs} packs`;
-  const heroImg = imageUrl(images.hero) ?? "/img/hero-illustration.png";
+  const heroImg = imageUrl(images.hero) ?? "/img/hero.jpg";
 
   return (
     <section
