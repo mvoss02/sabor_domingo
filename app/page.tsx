@@ -1,5 +1,6 @@
 import { getSiteData } from "@/lib/content";
 import Nav from "@/components/site/Nav";
+import PackBuilder from "@/components/site/PackBuilder";
 import Hero from "@/components/site/Hero";
 import Rhythm from "@/components/site/Rhythm";
 import Bios from "@/components/site/Bios";
@@ -16,7 +17,7 @@ export default async function Home() {
       <Nav />
       <Hero hero={data.hero} images={data.images} settings={data.settings} />
       <Rhythm settings={data.settings} />
-      <div id="order" />
+      <PackBuilder dishes={data.dishes} settings={data.settings} />
       <Bios images={data.images} />
       <EventsForm />
       <Faq faq={data.faq} />

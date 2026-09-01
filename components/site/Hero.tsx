@@ -2,22 +2,7 @@ import { imageUrl } from "@/lib/content";
 import NotifySignup from "@/components/site/NotifySignup";
 import type { HeroContent, ImageSlots, Settings } from "@/lib/types";
 
-const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
-function eur(n: number): string {
-  return "€" + (Math.round(n * 100) / 100).toFixed(2).replace(".00", "");
-}
-
-function isWindowOpen(settings: Settings): boolean {
-  if (settings.window_override === "open") return true;
-  if (settings.window_override === "closed") return false;
-  const todayName = DAY_ORDER[(new Date().getDay() + 6) % 7]; // getDay(): Sun=0 -> map to Mon-first index
-  const idx = DAY_ORDER.indexOf(todayName);
-  const openIdx = DAY_ORDER.indexOf(settings.open_day);
-  const closeIdx = DAY_ORDER.indexOf(settings.close_day);
-  if (openIdx === -1 || closeIdx === -1) return true;
-  return idx >= openIdx && idx <= closeIdx;
-}
+import { eur, isWindowOpen } from "@/lib/window";
 
 export default function Hero({
   hero,
@@ -40,11 +25,11 @@ export default function Hero({
   return (
     <section
       style={{
-        padding: "clamp(26px, 5vw, 58px) clamp(16px, 4vw, 44px) clamp(30px, 5vw, 64px)",
+        padding: "clamp(20px, 3.5vw, 40px) clamp(16px, 4vw, 44px) clamp(30px, 5vw, 64px)",
         display: "flex",
         flexWrap: "wrap",
         gap: "clamp(24px, 4vw, 52px)",
-        alignItems: "center",
+        alignItems: "flex-start",
         maxWidth: 1360,
         margin: "0 auto",
       }}
@@ -62,7 +47,7 @@ export default function Hero({
             fontWeight: 600,
             letterSpacing: "0.04em",
             textTransform: "uppercase",
-            marginBottom: 20,
+            marginBottom: 10,
             color: "#5e1d22",
           }}
         >
@@ -161,7 +146,16 @@ export default function Hero({
         </div>
       </div>
       <div style={{ flex: "1 1 340px", minWidth: 0, position: "relative" }}>
-        <div style={{ aspectRatio: "4 / 5", borderRadius: 18, overflow: "hidden" }}>
+        <div
+          style={{
+            aspectRatio: "4 / 5",
+            borderRadius: 18,
+            overflow: "hidden",
+            maxHeight: "min(76vh, 680px)",
+            maxWidth: "100%",
+            marginLeft: "auto",
+          }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={heroImg}
