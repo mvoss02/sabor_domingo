@@ -490,7 +490,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label style={{ display: "block" }}>
               <span style={labelStyle}>Delivery day</span>
-              <select value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} style={fieldStyle}>
+              <select className="sd-dark-field" value={deliveryDay} onChange={(e) => setDeliveryDay(e.target.value)} style={fieldStyle}>
                 {settings.delivery_days.map((d) => (
                   <option key={d} value={d}>
                     {d} evening · {settings.delivery_window}
@@ -501,6 +501,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
             <label style={{ display: "block" }}>
               <span style={labelStyle}>Name</span>
               <input
+                className="sd-dark-field"
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -511,6 +512,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
             <label style={{ display: "block" }}>
               <span style={labelStyle}>Address</span>
               <input
+                className="sd-dark-field"
                 type="text"
                 value={form.address}
                 onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -522,15 +524,21 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
               <label style={{ display: "block", flex: "1 1 0", minWidth: 0 }}>
                 <span style={labelStyle}>Postal code</span>
                 <input
+                  className="sd-dark-field"
                   type="text"
                   value={form.postal_code}
                   onChange={(e) => setForm((f) => ({ ...f, postal_code: e.target.value }))}
                   placeholder="1015 AB"
                   style={{
                     ...fieldStyle,
-                    borderColor: form.postal_code && !postalOk ? "#c8492a" : "#7c3a35",
+                    borderColor: form.postal_code && !postalOk ? "#f2a63b" : "#7c3a35",
                   }}
                 />
+                {form.postal_code && !postalOk && (
+                  <span style={{ display: "block", fontSize: 11.5, color: "#f2a63b", marginTop: 5, lineHeight: 1.4 }}>
+                    4 digits, space, 2 letters — like 1015 AB
+                  </span>
+                )}
               </label>
               <label style={{ display: "block", flex: "1 1 0", minWidth: 0 }}>
                 <span style={labelStyle}>Phone</span>
@@ -546,6 +554,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
             <label style={{ display: "block" }}>
               <span style={labelStyle}>Email</span>
               <input
+                className="sd-dark-field"
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
@@ -556,6 +565,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
             <label style={{ display: "block" }}>
               <span style={labelStyle}>Notes (allergies, spice level)</span>
               <textarea
+                className="sd-dark-field"
                 rows={2}
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}

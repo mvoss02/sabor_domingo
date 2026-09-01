@@ -92,3 +92,9 @@ textarea {
 .sd-qty-dec:hover { background: #ece0cb !important; }
 .sd-qty-inc:hover { background: #5e1d22 !important; }
 .sd-pay-btn:not(:disabled):hover { background: #f2a63b !important; color: #5e1d22 !important; }
+
+.sd-dark-field:focus {
+  outline: none;
+  border-color: #f2a63b !important;
+  box-shadow: 0 0 0 3px rgba(242, 166, 59, 0.25);
+}
