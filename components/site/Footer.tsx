@@ -43,6 +43,17 @@ export default function Footer() {
           <div style={{ maxWidth: 360 }}>
             <NotifySignup compact />
           </div>
+          <p style={{ fontSize: 11.5, margin: "22px 0 0", color: "#a1806f", lineHeight: 1.7 }}>
+            <a href="/privacy" style={{ color: "#a1806f", textDecoration: "underline" }}>
+              Privacy
+            </a>
+            {" · "}
+            <a href="/terms" style={{ color: "#a1806f", textDecoration: "underline" }}>
+              Terms &amp; conditions
+            </a>
+            <br />
+            Sabor Domingo · Amsterdam · KvK [KVK NUMBER] · BTW [BTW NUMBER]
+          </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
           <a
