@@ -56,3 +56,16 @@ def test_order_paid_hook_survives_email_failure(monkeypatch):
     from api._lib import webhook
     with patch.object(emails, "_send", side_effect=RuntimeError("boom")):
         webhook.on_order_paid(ORDER, ITEMS)  # must not raise
+
+
+def test_order_email_html_branded_and_escaped(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
+    sneaky = {**ORDER, "name": "<script>alert(1)</script>"}
+    with patch.object(emails, "_send") as send:
+        emails.send_order_emails(sneaky, ITEMS)
+        html = send.call_args_list[0].kwargs["html"]
+        assert "logo-white.png" in html
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html
