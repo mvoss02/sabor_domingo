@@ -57,7 +57,8 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
   const packsLeft = settings.max_packs - totalPacks;
   const postalOk = /^\d{4}\s?[A-Za-z]{2}$/.test(form.postal_code.trim());
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim());
-  const phoneOk = /^\+?[0-9][0-9 \-()]{5,}$/.test(form.phone.trim());
+  // must start like a real dialable number: +31…, 0031…, or domestic 06…/020…
+  const phoneOk = /^(\+[1-9]|00[1-9]|0[1-9])[0-9 \-()]{5,}$/.test(form.phone.trim());
   const formComplete = form.name.trim() && emailOk && form.address.trim() && postalOk && phoneOk;
   const canSubmit = windowOpen && totalPacks > 0 && !!formComplete && !submitting;
 
@@ -630,7 +631,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
               />
               {form.phone && !phoneOk && (
                 <span style={{ display: "block", fontSize: 11.5, color: "#f2a63b", marginTop: 5, lineHeight: 1.4 }}>
-                  Digits only (spaces OK), at least 6 — like +31 6 12345678
+                  Start with +31, 0031 or 0 — like +31 6 12345678 or 06 12345678
                 </span>
               )}
             </label>
