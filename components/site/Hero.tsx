@@ -62,7 +62,7 @@ export default function Hero({
           ></span>
           <span>{windowLabel}</span>
         </div>
-        <div style={{ display: windowOpen ? "none" : "block", maxWidth: 420, marginBottom: 20 }}>
+        <div id="notify" style={{ display: windowOpen ? "none" : "block", maxWidth: 420, marginBottom: 20, scrollMarginTop: 90 }}>
           <NotifySignup />
         </div>
         <h1
