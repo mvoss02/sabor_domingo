@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from api._lib.config import env
 from api._lib.db import get_client
-from api._lib.emails import send_inquiry_notification
+from api._lib.emails import send_inquiry_notification, subscribe_contact
 from api._lib.orders import CheckoutPayload, WindowClosed, create_checkout
 from api._lib.pricing import CartError
 from api._lib.webhook import handle_event
@@ -54,6 +54,20 @@ def inquiry(payload: InquiryPayload):
         send_inquiry_notification(row)
     except Exception as e:
         print(f"inquiry email failed: {e}")
+    return {"ok": True}
+
+
+class SubscribePayload(BaseModel):
+    email: EmailStr
+
+
+@app.post("/api/py/subscribe")
+def subscribe(payload: SubscribePayload):
+    try:
+        subscribe_contact(payload.email)
+    except Exception as e:
+        print(f"subscribe failed: {e}")
+        raise HTTPException(status_code=502, detail="Could not subscribe right now.")
     return {"ok": True}
 
 

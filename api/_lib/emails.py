@@ -3,6 +3,21 @@ import httpx
 from api._lib.config import env
 
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
+BREVO_CONTACTS_URL = "https://api.brevo.com/v3/contacts"
+
+
+def subscribe_contact(email: str) -> None:
+    resp = httpx.post(
+        BREVO_CONTACTS_URL,
+        headers={"api-key": env("BREVO_API_KEY"), "accept": "application/json"},
+        json={
+            "email": email,
+            "listIds": [int(env("BREVO_LIST_ID"))],
+            "updateEnabled": True,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
 
 
 def _send(subject: str, text: str, to: list[str]) -> None:

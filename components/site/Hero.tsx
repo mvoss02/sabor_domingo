@@ -1,4 +1,5 @@
 import { imageUrl } from "@/lib/content";
+import NotifySignup from "@/components/site/NotifySignup";
 import type { HeroContent, ImageSlots, Settings } from "@/lib/types";
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -75,6 +76,9 @@ export default function Hero({
             }}
           ></span>
           <span>{windowLabel}</span>
+        </div>
+        <div style={{ display: windowOpen ? "none" : "block", maxWidth: 420, marginBottom: 20 }}>
+          <NotifySignup />
         </div>
         <h1
           style={{

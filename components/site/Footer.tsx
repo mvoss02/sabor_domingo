@@ -1,3 +1,4 @@
+import NotifySignup from "@/components/site/NotifySignup";
 export default function Footer() {
   return (
     <footer
@@ -36,6 +37,12 @@ export default function Footer() {
           >
             Amsterdam · hola@sabordomingo.nl
           </p>
+          <p style={{ fontSize: 13, margin: "18px 0 0", opacity: 0.85 }}>
+            Get a note when the weekly menu opens:
+          </p>
+          <div style={{ maxWidth: 360 }}>
+            <NotifySignup compact />
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
           <a
