@@ -527,7 +527,11 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                   className="sd-dark-field"
                   type="text"
                   value={form.postal_code}
-                  onChange={(e) => setForm((f) => ({ ...f, postal_code: e.target.value }))}
+                  onChange={(e) => {
+                    let v = e.target.value.toUpperCase().replace(/\s+/g, "");
+                    if (/^\d{4}[A-Z]/.test(v)) v = v.slice(0, 4) + " " + v.slice(4, 6);
+                    setForm((f) => ({ ...f, postal_code: v.slice(0, 7) }));
+                  }}
                   placeholder="1015 AB"
                   style={{
                     ...fieldStyle,
