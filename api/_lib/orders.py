@@ -24,8 +24,15 @@ class CheckoutPayload(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     email: EmailStr
     address: str = Field(min_length=1, max_length=500)
+    postal_code: str = Field(pattern=r"^\d{4}\s?[A-Za-z]{2}$")
+    phone: str = Field(min_length=6, max_length=40)
     notes: str = Field(default="", max_length=1000)
     delivery_day: str
+
+    @property
+    def postal_normalized(self) -> str:
+        raw = self.postal_code.replace(" ", "").upper()
+        return f"{raw[:4]} {raw[4:]}"
 
 
 class WindowClosed(Exception):
@@ -51,6 +58,7 @@ def create_checkout(payload: CheckoutPayload) -> str:
     order = client.table("orders").insert({
         "status": "pending_payment",
         "name": payload.name, "email": payload.email, "address": payload.address,
+        "postal_code": payload.postal_normalized, "phone": payload.phone,
         "notes": payload.notes, "delivery_day": payload.delivery_day,
         "subtotal": totals.subtotal_cents / 100, "fee": totals.fee_cents / 100,
         "total": totals.total_cents / 100,

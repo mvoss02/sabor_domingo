@@ -27,7 +27,14 @@ const labelStyle: React.CSSProperties = {
 export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; settings: Settings }) {
   const [packSize, setPackSize] = useState<4 | 10>(10);
   const [cart, setCart] = useState<Record<string, number>>({});
-  const [form, setForm] = useState({ name: "", email: "", address: "", notes: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    address: "",
+    postal_code: "",
+    phone: "",
+    notes: "",
+  });
   const [deliveryDay, setDeliveryDay] = useState(settings.delivery_days[0] ?? "Monday");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +53,9 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
   ); // display only; server recomputes
   const total = totalPacks > 0 ? subtotal + settings.order_fee : 0;
   const packsLeft = settings.max_packs - totalPacks;
-  const formComplete = form.name.trim() && form.email.trim() && form.address.trim();
+  const postalOk = /^\d{4}\s?[A-Za-z]{2}$/.test(form.postal_code.trim());
+  const formComplete =
+    form.name.trim() && form.email.trim() && form.address.trim() && postalOk && form.phone.trim().length >= 6;
   const canSubmit = windowOpen && totalPacks > 0 && !!formComplete && !submitting;
 
   function add(dishId: string, delta: number) {
@@ -389,8 +398,8 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
               })}
           </div>
           <p style={{ fontSize: 12.5, color: "#a1806f", margin: "14px 0 0", lineHeight: 1.6 }}>
-            Every pack comes with rice, tortillas and one of our salsas. Allergies or no spice? Tell
-            us in the notes.
+            Every pack comes with tortillas and one of our salsas. Allergies or no spice? Tell us in
+            the notes.
           </p>
         </div>
 
@@ -505,10 +514,35 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                 type="text"
                 value={form.address}
                 onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-                placeholder="Street, number, 1015 AB"
+                placeholder="Street and house number"
                 style={fieldStyle}
               />
             </label>
+            <div style={{ display: "flex", gap: 10 }}>
+              <label style={{ display: "block", flex: "1 1 0", minWidth: 0 }}>
+                <span style={labelStyle}>Postal code</span>
+                <input
+                  type="text"
+                  value={form.postal_code}
+                  onChange={(e) => setForm((f) => ({ ...f, postal_code: e.target.value }))}
+                  placeholder="1015 AB"
+                  style={{
+                    ...fieldStyle,
+                    borderColor: form.postal_code && !postalOk ? "#c8492a" : "#7c3a35",
+                  }}
+                />
+              </label>
+              <label style={{ display: "block", flex: "1 1 0", minWidth: 0 }}>
+                <span style={labelStyle}>Phone</span>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="+31 6 12345678"
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
             <label style={{ display: "block" }}>
               <span style={labelStyle}>Email</span>
               <input

@@ -65,7 +65,9 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
     _send(
         subject=f"New order {ref} — {order['name']} ({order['delivery_day']})",
         text=(
-            f"{order['name']} <{order['email']}>\n{order['address']}\n"
+            f"{order['name']} <{order['email']}>\n"
+            f"{order['address']}, {order.get('postal_code', '')}\n"
+            f"Phone: {order.get('phone') or '—'}\n"
             f"Delivery: {order['delivery_day']}\nNotes: {order['notes'] or '—'}\n\n"
             f"{_items_text(items)}\n\nTotal: €{order['total']}"
         ),

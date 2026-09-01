@@ -18,7 +18,33 @@ DISH_ROWS = [{"id": "d1", "name": "Cochinita", "available": True}]
 
 VALID_BODY = {"lines": [{"dish_id": "d1", "pack_size": 10, "qty": 1}],
               "name": "Ana", "email": "ana@example.com",
-              "address": "Javastraat 44", "notes": "", "delivery_day": "Monday"}
+              "address": "Javastraat 44", "postal_code": "1094 hh", "phone": "+31612345678",
+              "notes": "", "delivery_day": "Monday"}
+
+
+def test_postal_code_normalized_and_phone_stored(monkeypatch):
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    resp, _, db = post(VALID_BODY, OPEN_NOW)
+    assert resp.status_code == 200
+    inserted = db.table("orders").insert.call_args.args[0]
+    assert inserted["postal_code"] == "1094 HH"
+    assert inserted["phone"] == "+31612345678"
+
+
+def test_invalid_postal_code_422(monkeypatch):
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    resp, _, _ = post({**VALID_BODY, "postal_code": "10944"}, OPEN_NOW)
+    assert resp.status_code == 422
+
+
+def test_missing_phone_422(monkeypatch):
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    body = {k: v for k, v in VALID_BODY.items() if k != "phone"}
+    resp, _, _ = post(body, OPEN_NOW)
+    assert resp.status_code == 422
 
 
 def fake_db():
