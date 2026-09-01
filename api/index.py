@@ -1,3 +1,5 @@
+import os
+
 import stripe
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
@@ -9,7 +11,9 @@ from api._lib.orders import CheckoutPayload, WindowClosed, create_checkout
 from api._lib.pricing import CartError
 from api._lib.webhook import handle_event
 
-app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
+_prod = os.environ.get("VERCEL_ENV") == "production"
+app = FastAPI(docs_url=None if _prod else "/api/py/docs",
+              openapi_url=None if _prod else "/api/py/openapi.json")
 
 
 @app.get("/api/py/health")

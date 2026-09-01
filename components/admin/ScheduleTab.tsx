@@ -14,14 +14,20 @@ const OVERRIDES = [
 export default function ScheduleTab() {
   const [s, setS] = useState<Settings | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from("settings").select("*").eq("id", 1).single().then(({ data }) => {
+    supabase.from("settings").select("*").eq("id", 1).single().then(({ data, error }) => {
+      if (error) return setLoadError(`Error loading — try refreshing or log in again (${error.message})`);
       setS(data as Settings);
     });
   }, []);
 
-  if (!s) return null;
+  if (loadError) {
+    return <p style={{ fontSize: 13.5, fontWeight: 600, color: "#c8492a" }}>{loadError}</p>;
+  }
+
+  if (!s) return <p style={{ fontSize: 13.5, color: "#a1806f" }}>Loading…</p>;
 
   function toggleDeliveryDay(day: string) {
     setS((prev) =>

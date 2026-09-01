@@ -22,7 +22,10 @@ export default function InquiriesTab() {
       .from("inquiries")
       .select("*")
       .order("created_at", { ascending: false })
-      .then(({ data }) => setInquiries((data ?? []) as Inquiry[]));
+      .then(({ data, error }) => {
+        if (error) return setStatus(`Error loading — try refreshing or log in again (${error.message})`);
+        setInquiries((data ?? []) as Inquiry[]);
+      });
   }, []);
 
   async function remove(i: Inquiry) {

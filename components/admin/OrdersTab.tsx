@@ -34,6 +34,7 @@ export default function OrdersTab() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>("paid");
   const [dayFilter, setDayFilter] = useState<string>("all");
+  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -41,7 +42,10 @@ export default function OrdersTab() {
       .select("*, order_items(*)")
       .order("created_at", { ascending: false })
       .limit(200)
-      .then(({ data }) => setOrders((data ?? []) as Order[]));
+      .then(({ data, error }) => {
+        if (error) return setStatus(`Error loading — try refreshing or log in again (${error.message})`);
+        setOrders((data ?? []) as Order[]);
+      });
   }, []);
 
   const filtered = orders.filter(
@@ -80,6 +84,10 @@ export default function OrdersTab() {
       <h1 style={{ fontWeight: 700, fontSize: "clamp(24px, 4vw, 34px)", letterSpacing: "-0.03em", margin: "0 0 16px", color: "#5e1d22" }}>
         Orders
       </h1>
+
+      {status && (
+        <p style={{ fontSize: 13.5, fontWeight: 600, color: "#c8492a", margin: "0 0 14px" }}>{status}</p>
+      )}
 
       {cookSummary.length > 0 && (
         <div style={{ ...adminCard, marginBottom: 18 }}>

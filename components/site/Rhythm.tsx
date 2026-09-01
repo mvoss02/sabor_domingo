@@ -26,7 +26,7 @@ function buildWeek(settings: Settings) {
       return {
         short: SHORT[day as keyof typeof SHORT],
         title: "Orders close",
-        note: `Cut-off at ${settings.cutoff_time}. After that the list is final.`,
+        note: `Cut-off at ${String(settings.cutoff_time).slice(0, 5)}. After that the list is final.`,
         bg: "#f2a63b",
         fg: "#4a1519",
       };
@@ -188,8 +188,8 @@ export default function Rhythm({ settings }: { settings: Settings }) {
             </h3>
             <p style={{ fontSize: 14.5, lineHeight: 1.65, color: "#e0cdb8", margin: 0 }}>
               Pick a 4-meal or 10-meal pack, choose your dishes, pay by card. The list closes{" "}
-              {settings.close_day} at {settings.cutoff_time} and opens again {settings.open_day}{" "}
-              morning.
+              {settings.close_day} at {String(settings.cutoff_time).slice(0, 5)} and opens again{" "}
+              {settings.open_day} morning.
             </p>
           </div>
           <div style={{ flex: "1 1 230px", minWidth: 0 }}>

@@ -10,7 +10,8 @@ export default function ContentTab() {
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from("site_content").select("key, value").in("key", ["hero", "faq"]).then(({ data }) => {
+    supabase.from("site_content").select("key, value").in("key", ["hero", "faq"]).then(({ data, error }) => {
+      if (error) return setStatus(`Error loading — try refreshing or log in again (${error.message})`);
       for (const row of data ?? []) {
         if (row.key === "hero") setHero(row.value as HeroContent);
         if (row.key === "faq") setFaq((row.value ?? []) as FaqEntry[]);

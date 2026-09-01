@@ -17,7 +17,8 @@ export default function ImagesTab() {
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from("site_content").select("value").eq("key", "images").single().then(({ data }) => {
+    supabase.from("site_content").select("value").eq("key", "images").single().then(({ data, error }) => {
+      if (error) return setStatus(`Error loading — try refreshing or log in again (${error.message})`);
       if (data?.value) setSlots(data.value as ImageSlots);
     });
   }, []);
@@ -25,6 +26,7 @@ export default function ImagesTab() {
   async function upload(slotKey: string, file: File) {
     setStatus("Uploading…");
     const ext = file.name.split(".").pop() ?? "png";
+    // eslint-disable-next-line react-hooks/purity -- inside an event handler, not render; Date.now() here just makes the filename unique
     const path = `${slotKey}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("images").upload(path, file);
     if (error) return setStatus(`Upload failed: ${error.message}`);
@@ -78,7 +80,7 @@ export default function ImagesTab() {
       </p>
 
       {status && (
-        <p style={{ fontSize: 13.5, fontWeight: 600, color: status.includes("failed") ? "#c8492a" : "#2e6b3e", margin: "0 0 14px" }}>
+        <p style={{ fontSize: 13.5, fontWeight: 600, color: status.includes("failed") || status.startsWith("Error") ? "#c8492a" : "#2e6b3e", margin: "0 0 14px" }}>
           {status}
         </p>
       )}

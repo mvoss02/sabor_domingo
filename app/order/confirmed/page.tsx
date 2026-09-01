@@ -1,6 +1,8 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { eur } from "@/lib/window";
 
 type OrderStatus = { status: string; ref: string; delivery_day: string; total: number };
 
@@ -77,15 +79,15 @@ function Confirmed() {
             Your order is in.
           </h1>
           <p style={{ fontSize: 15, lineHeight: 1.65, margin: "0 0 22px", color: "#6a4a3f" }}>
-            Order <strong>{order.ref}</strong> · delivery {order.delivery_day} evening · €{order.total}
+            Order <strong>{order.ref}</strong> · delivery {order.delivery_day} evening · {eur(order.total)}
           </p>
           <p style={{ fontSize: 14, lineHeight: 1.65, margin: "0 0 8px", color: "#6a4a3f" }}>
             We confirm your dishes by email on Monday morning, after the market. Everything arrives
             chilled and portioned with reheating notes — fridge for 4 days, freezer for a month.
           </p>
-          <a href="/" style={{ display: "inline-block", marginTop: 18, fontWeight: 600, color: "#c8492a" }}>
+          <Link href="/" style={{ display: "inline-block", marginTop: 18, fontWeight: 600, color: "#c8492a" }}>
             ← Back to Sabor Domingo
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -101,7 +103,7 @@ function Confirmed() {
           <p style={{ fontSize: 15, lineHeight: 1.65, margin: "0 0 18px", color: "#6a4a3f" }}>
             No worries — nothing was charged. Your pack is still waiting.
           </p>
-          <a
+          <Link
             href="/#order"
             style={{
               display: "inline-block",
@@ -113,7 +115,7 @@ function Confirmed() {
             }}
           >
             Try again
-          </a>
+          </Link>
         </div>
       </div>
     );

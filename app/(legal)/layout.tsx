@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
   return (
     <main
@@ -10,9 +12,9 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
         lineHeight: 1.7,
       }}
     >
-      <a href="/" style={{ fontWeight: 600, color: "#c8492a", fontSize: 13.5 }}>
+      <Link href="/" style={{ fontWeight: 600, color: "#c8492a", fontSize: 13.5 }}>
         ← Back to Sabor Domingo
-      </a>
+      </Link>
       {children}
     </main>
   );

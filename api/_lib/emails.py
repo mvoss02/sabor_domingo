@@ -1,9 +1,17 @@
+from decimal import Decimal
+
 import httpx
 
 from api._lib.config import env
 
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 BREVO_CONTACTS_URL = "https://api.brevo.com/v3/contacts"
+
+
+def _eur(v) -> str:
+    # PostgREST returns numeric columns as float (e.g. 89.5, 85.0); formatting
+    # via Decimal(str(v)) avoids float repr artifacts and always shows 2 dp.
+    return f"{Decimal(str(v)):.2f}"
 
 
 def subscribe_contact(email: str) -> None:
@@ -41,7 +49,7 @@ def _admins() -> list[str]:
 
 def _items_text(items: list[dict]) -> str:
     return "\n".join(
-        f"  {i['qty']}× {i['pack_size']}-meal pack · {i['dish_name']} — €{i['unit_price']}"
+        f"  {i['qty']}× {i['pack_size']}-meal pack · {i['dish_name']} — €{_eur(i['unit_price'])}"
         for i in items)
 
 
@@ -54,7 +62,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f"Hola {order['name']},\n\n"
             f"Your order {ref} is confirmed. We cook on Monday and deliver on "
             f"{order['delivery_day']} evening.\n\nYour pack:\n{_items_text(items)}\n\n"
-            f"Total: €{order['total']}\n\n"
+            f"Total: €{_eur(order['total'])}\n\n"
             "Everything arrives chilled and portioned with reheating notes — "
             "fridge for 4 days, freezer for a month.\n\n"
             "Un apapacho,\nMaca & Clau"
@@ -69,7 +77,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f"{order['address']}, {order.get('postal_code', '')}\n"
             f"Phone: {order.get('phone') or '—'}\n"
             f"Delivery: {order['delivery_day']}\nNotes: {order['notes'] or '—'}\n\n"
-            f"{_items_text(items)}\n\nTotal: €{order['total']}"
+            f"{_items_text(items)}\n\nTotal: €{_eur(order['total'])}"
         ),
         to=_admins(),
     )

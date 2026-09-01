@@ -11,10 +11,12 @@ export default function MenuTab() {
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from("dishes").select("*").order("sort_order").then(({ data }) => {
+    supabase.from("dishes").select("*").order("sort_order").then(({ data, error }) => {
+      if (error) return setStatus(`Error loading — try refreshing or log in again (${error.message})`);
       setDishes((data ?? []) as Dish[]);
     });
-    supabase.from("settings").select("*").eq("id", 1).single().then(({ data }) => {
+    supabase.from("settings").select("*").eq("id", 1).single().then(({ data, error }) => {
+      if (error) return setStatus(`Error loading — try refreshing or log in again (${error.message})`);
       setSettings(data as Settings);
     });
   }, []);
@@ -53,6 +55,7 @@ export default function MenuTab() {
   async function uploadPhoto(d: Dish, file: File) {
     setStatus("Uploading…");
     const ext = file.name.split(".").pop() ?? "png";
+    // eslint-disable-next-line react-hooks/purity -- inside an event handler, not render; Date.now() here just makes the filename unique
     const path = `${d.id}-${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("images").upload(path, file);
     if (error) return setStatus(`Upload failed: ${error.message}`);
@@ -64,6 +67,16 @@ export default function MenuTab() {
 
   async function savePricing() {
     if (!settings) return;
+    // A cleared number input reads as Number("") = 0, which would otherwise
+    // save silently and make packs orderable for free.
+    if (settings.price_4 <= 0 || settings.price_10 <= 0 || settings.max_packs <= 0) {
+      setStatus("Error: pack prices and max packs must be greater than 0");
+      return;
+    }
+    if (settings.order_fee < 0) {
+      setStatus("Error: order fee can't be negative");
+      return;
+    }
     const { error } = await supabase
       .from("settings")
       .update({
@@ -207,6 +220,7 @@ export default function MenuTab() {
               <input
                 type="number"
                 step="0.5"
+                min="0.5"
                 value={settings.price_4}
                 onChange={(e) => setSettings({ ...settings, price_4: Number(e.target.value) })}
                 style={adminInput}
@@ -217,6 +231,7 @@ export default function MenuTab() {
               <input
                 type="number"
                 step="0.5"
+                min="0.5"
                 value={settings.price_10}
                 onChange={(e) => setSettings({ ...settings, price_10: Number(e.target.value) })}
                 style={adminInput}
@@ -227,6 +242,7 @@ export default function MenuTab() {
               <input
                 type="number"
                 step="0.5"
+                min="0"
                 value={settings.order_fee}
                 onChange={(e) => setSettings({ ...settings, order_fee: Number(e.target.value) })}
                 style={adminInput}
@@ -237,6 +253,7 @@ export default function MenuTab() {
               <input
                 type="number"
                 step="1"
+                min="1"
                 value={settings.max_packs}
                 onChange={(e) => setSettings({ ...settings, max_packs: Number(e.target.value) })}
                 style={adminInput}

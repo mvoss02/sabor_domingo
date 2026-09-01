@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 const darkField: React.CSSProperties = {
@@ -99,7 +100,7 @@ export default function Login() {
           {error && (
             <p style={{ fontSize: 13, color: "#f2a63b", textAlign: "center", margin: 0 }}>{error}</p>
           )}
-          <a
+          <Link
             href="/"
             style={{
               color: "#a1806f",
@@ -112,7 +113,7 @@ export default function Login() {
             }}
           >
             ← Back to site
-          </a>
+          </Link>
         </div>
       </form>
     </div>

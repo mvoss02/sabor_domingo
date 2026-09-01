@@ -2,10 +2,12 @@ from unittest.mock import MagicMock, patch
 
 from api._lib import emails
 
+# PostgREST returns numeric columns as float -- fixtures mirror that so the
+# €89.0 / €89.5 formatting bug (Important 5) stays covered.
 ORDER = {"id": "o1", "ref_num": 241, "name": "Ana", "email": "ana@example.com",
          "address": "Javastraat 44", "delivery_day": "Monday",
-         "subtotal": 85, "fee": 4, "total": 89, "notes": ""}
-ITEMS = [{"pack_size": 10, "dish_name": "Cochinita", "qty": 1, "unit_price": 85}]
+         "subtotal": 85.0, "fee": 4.0, "total": 89.5, "notes": ""}
+ITEMS = [{"pack_size": 10, "dish_name": "Cochinita", "qty": 1, "unit_price": 85.0}]
 
 
 def test_sends_customer_and_admin_email(monkeypatch):
@@ -18,8 +20,17 @@ def test_sends_customer_and_admin_email(monkeypatch):
         first = send.call_args_list[0]
         assert first.kwargs["to"] == ["ana@example.com"]
         assert "#SD-241" in first.kwargs["subject"]
+        assert "€89.50" in first.kwargs["text"]
+        assert "€85.00" in first.kwargs["text"]
         second = send.call_args_list[1]
         assert set(second.kwargs["to"]) == {"maca@x.com", "clau@x.com"}
+        assert "€89.50" in second.kwargs["text"]
+
+
+def test_eur_formats_float_money_with_two_decimals():
+    assert emails._eur(89.0) == "89.00"
+    assert emails._eur(89.5) == "89.50"
+    assert emails._eur(4) == "4.00"
 
 
 def test_send_posts_brevo_payload(monkeypatch):
