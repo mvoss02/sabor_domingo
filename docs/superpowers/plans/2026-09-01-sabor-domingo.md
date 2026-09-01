@@ -4,9 +4,9 @@
 
 **Goal:** Production ordering site for a weekly Mexican meal-pack business: landing page, pack builder + Stripe Checkout, admin panel, on Vercel.
 
-**Architecture:** One Vercel project: Next.js app (landing, order flow, admin) + FastAPI in `api/index.py` deployed as a Python serverless function (official Vercel Next.js+FastAPI pattern, next.config rewrites `/api/py/*`). Supabase = Postgres + Auth + Storage; browser reads public data directly (RLS), all money paths go through FastAPI. Stripe Checkout (hosted, iDEAL + cards) with webhook as source of truth. Resend for email.
+**Architecture:** One Vercel project: Next.js app (landing, order flow, admin) + FastAPI in `api/index.py` deployed as a Python serverless function (official Vercel Next.js+FastAPI pattern, next.config rewrites `/api/py/*`). Supabase = Postgres + Auth + Storage; browser reads public data directly (RLS), all money paths go through FastAPI. Stripe Checkout (hosted, iDEAL + cards) with webhook as source of truth. Brevo for email.
 
-**Tech Stack:** Next.js (App Router, TypeScript, no Tailwind — prototype uses inline styles), FastAPI, supabase-py, supabase-js, stripe (python), resend (python), pytest.
+**Tech Stack:** Next.js (App Router, TypeScript, no Tailwind — prototype uses inline styles), FastAPI, supabase-py, supabase-js, stripe (python), Brevo transactional email via httpx (no SDK), pytest.
 
 **Spec:** `docs/superpowers/specs/2026-09-01-sabor-domingo-design.md`
 
@@ -19,7 +19,7 @@
 - Visual reference: `design-reference/sabor-standalone-src.html` (inline styles; convert mechanically to JSX `style` objects). Copy/text content comes from this file.
 - Python ≥3.12, deps pinned in `requirements.txt`. Node deps via npm.
 - Secrets only via env vars; `.env.local` / `.env` gitignored; `.env.example` maintained.
-- Env var names (fixed): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `ADMIN_EMAILS` (comma-separated), `SITE_URL`.
+- Env var names (fixed): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `BREVO_API_KEY`, `EMAIL_FROM` (Brevo-verified sender address), `ADMIN_EMAILS` (comma-separated), `SITE_URL`. (Changed 2026-09-01: Brevo replaces Resend; `.env.example` updated in Task 8.)
 - FastAPI routes all prefixed `/api/py/` (full path in route decorators — Vercel passes original URL).
 - Commit after every task (conventional commits).
 
@@ -1080,16 +1080,17 @@ git add api tests && git commit -m "feat: stripe webhook with idempotent status 
 
 ---
 
-### Task 8: Emails (Resend) + inquiry endpoint
+### Task 8: Emails (Brevo) + inquiry endpoint
 
 **Files:**
 - Create: `api/_lib/emails.py`, `tests/test_emails.py`
-- Modify: `api/_lib/webhook.py` (replace `on_order_paid` body), `api/index.py` (inquiry route)
+- Modify: `api/_lib/webhook.py` (replace `on_order_paid` body), `api/index.py` (inquiry route), `requirements.txt` (remove `resend` line), `.env.example` (replace RESEND_API_KEY with BREVO_API_KEY + EMAIL_FROM placeholders)
 
 **Interfaces:**
-- Consumes: `resend` SDK, `config.env`, `db.get_client`.
+- Consumes: Brevo transactional API `POST https://api.brevo.com/v3/smtp/email` (header `api-key`, JSON body with `sender`/`to`/`subject`/`textContent`) via `httpx` (already in requirements); `config.env`; `db.get_client`.
 - Produces:
-  - `emails.send_order_emails(order: dict, items: list[dict]) -> None` — customer confirmation + admin notification (`ADMIN_EMAILS` comma-separated). From: `Sabor Domingo <onboarding@resend.dev>` until custom domain.
+  - `emails.send_order_emails(order: dict, items: list[dict]) -> None` — customer confirmation + admin notification (`ADMIN_EMAILS` comma-separated). Sender: `{"name": "Sabor Domingo", "email": env("EMAIL_FROM")}` — EMAIL_FROM must be a Brevo-verified sender.
+  - `emails._send(subject: str, text: str, to: list[str]) -> None` — single seam wrapping the httpx POST; raises on non-2xx (`resp.raise_for_status()`), 10s timeout. Tests patch `_send` (unit) and `httpx.post` (one payload-shape test).
   - `emails.send_inquiry_notification(inquiry: dict) -> None`
   - `POST /api/py/inquiry` body `{"name","email","type","guests","message"}` → inserts row (service role) + notifies admins → `{"ok": true}`. Never 500s to the user on email failure (email wrapped in try/except; insert is what matters).
   - `webhook.on_order_paid` now calls `send_order_emails`; email failure must NOT fail the webhook (Stripe would retry forever) — wrap in try/except, log via `print` (shows in Vercel logs).
@@ -1109,23 +1110,41 @@ ITEMS = [{"pack_size": 10, "dish_name": "Cochinita", "qty": 1, "unit_price": 85}
 
 
 def test_sends_customer_and_admin_email(monkeypatch):
-    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
     monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com,clau@x.com")
-    with patch.object(emails.resend.Emails, "send") as send:
+    with patch.object(emails, "_send") as send:
         emails.send_order_emails(ORDER, ITEMS)
         assert send.call_count == 2
-        first = send.call_args_list[0].args[0]
-        assert first["to"] == ["ana@example.com"]
-        assert "#SD-241" in first["subject"]
-        second = send.call_args_list[1].args[0]
-        assert set(second["to"]) == {"maca@x.com", "clau@x.com"}
+        first = send.call_args_list[0]
+        assert first.kwargs["to"] == ["ana@example.com"]
+        assert "#SD-241" in first.kwargs["subject"]
+        second = send.call_args_list[1]
+        assert set(second.kwargs["to"]) == {"maca@x.com", "clau@x.com"}
+
+
+def test_send_posts_brevo_payload(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    with patch.object(emails.httpx, "post") as post:
+        post.return_value = MagicMock(status_code=201)
+        emails._send(subject="Hi", text="Body", to=["a@b.c"])
+        args, kwargs = post.call_args
+        assert args[0] == "https://api.brevo.com/v3/smtp/email"
+        assert kwargs["headers"]["api-key"] == "xkeysib-test"
+        body = kwargs["json"]
+        assert body["sender"]["email"] == "hola@sabordomingo.test"
+        assert body["to"] == [{"email": "a@b.c"}]
+        assert body["subject"] == "Hi"
+        assert body["textContent"] == "Body"
 
 
 def test_order_paid_hook_survives_email_failure(monkeypatch):
-    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
     monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
     from api._lib import webhook
-    with patch.object(emails.resend.Emails, "send", side_effect=RuntimeError("boom")):
+    with patch.object(emails, "_send", side_effect=RuntimeError("boom")):
         webhook.on_order_paid(ORDER, ITEMS)  # must not raise
 ```
 
@@ -1137,11 +1156,30 @@ Run: `pytest tests/test_emails.py -q` — Expected: FAIL.
 
 `api/_lib/emails.py`:
 ```python
-import resend
+import httpx
 
 from api._lib.config import env
 
-FROM = "Sabor Domingo <onboarding@resend.dev>"
+BREVO_URL = "https://api.brevo.com/v3/smtp/email"
+
+
+def _send(subject: str, text: str, to: list[str]) -> None:
+    resp = httpx.post(
+        BREVO_URL,
+        headers={"api-key": env("BREVO_API_KEY"), "accept": "application/json"},
+        json={
+            "sender": {"name": "Sabor Domingo", "email": env("EMAIL_FROM")},
+            "to": [{"email": addr} for addr in to],
+            "subject": subject,
+            "textContent": text,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
+def _admins() -> list[str]:
+    return [a.strip() for a in env("ADMIN_EMAILS").split(",") if a.strip()]
 
 
 def _items_text(items: list[dict]) -> str:
@@ -1151,14 +1189,11 @@ def _items_text(items: list[dict]) -> str:
 
 
 def send_order_emails(order: dict, items: list[dict]) -> None:
-    resend.api_key = env("RESEND_API_KEY")
     ref = f"#SD-{order['ref_num']}"
 
-    resend.Emails.send({
-        "from": FROM,
-        "to": [order["email"]],
-        "subject": f"Your Sabor Domingo order {ref} is confirmed",
-        "text": (
+    _send(
+        subject=f"Your Sabor Domingo order {ref} is confirmed",
+        text=(
             f"Hola {order['name']},\n\n"
             f"Your order {ref} is confirmed. We cook on Monday and deliver on "
             f"{order['delivery_day']} evening.\n\nYour pack:\n{_items_text(items)}\n\n"
@@ -1167,33 +1202,29 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             "fridge for 4 days, freezer for a month.\n\n"
             "Un apapacho,\nMaca & Clau"
         ),
-    })
+        to=[order["email"]],
+    )
 
-    admins = [a.strip() for a in env("ADMIN_EMAILS").split(",") if a.strip()]
-    resend.Emails.send({
-        "from": FROM,
-        "to": admins,
-        "subject": f"New order {ref} — {order['name']} ({order['delivery_day']})",
-        "text": (
+    _send(
+        subject=f"New order {ref} — {order['name']} ({order['delivery_day']})",
+        text=(
             f"{order['name']} <{order['email']}>\n{order['address']}\n"
             f"Delivery: {order['delivery_day']}\nNotes: {order['notes'] or '—'}\n\n"
             f"{_items_text(items)}\n\nTotal: €{order['total']}"
         ),
-    })
+        to=_admins(),
+    )
 
 
 def send_inquiry_notification(inquiry: dict) -> None:
-    resend.api_key = env("RESEND_API_KEY")
-    admins = [a.strip() for a in env("ADMIN_EMAILS").split(",") if a.strip()]
-    resend.Emails.send({
-        "from": FROM,
-        "to": admins,
-        "subject": f"Event inquiry — {inquiry['name']} ({inquiry['type']})",
-        "text": (
+    _send(
+        subject=f"Event inquiry — {inquiry['name']} ({inquiry['type']})",
+        text=(
             f"{inquiry['name']} <{inquiry['email']}>\nType: {inquiry['type']}\n"
             f"Guests: {inquiry.get('guests') or '—'}\n\n{inquiry.get('message') or ''}"
         ),
-    })
+        to=_admins(),
+    )
 ```
 
 `api/_lib/webhook.py` — replace `on_order_paid`:
@@ -1239,7 +1270,7 @@ Run: `pytest -q` — Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add api tests && git commit -m "feat: resend emails and inquiry endpoint"
+git add api tests requirements.txt .env.example && git commit -m "feat: brevo emails and inquiry endpoint"
 ```
 
 ---
@@ -1739,12 +1770,12 @@ async function uploadTo(slot: string, file: File) {
 - Produces: list newest first: name, email (mailto link), type, guests, message, created_at; delete button per row.
 
 - [ ] **Step 1: Implement** (fetch + delete, MenuTab pattern).
-- [ ] **Step 2: Verify** — submit events form on landing → row appears in tab (+ admin email if Resend key configured).
+- [ ] **Step 2: Verify** — submit events form on landing → row appears in tab (+ admin email if Brevo key configured).
 - [ ] **Step 3: Commit** — `git commit -m "feat: admin inquiries tab"`
 
 ---
 
-### Task 19: Deploy to Vercel + Stripe/Resend production wiring + E2E
+### Task 19: Deploy to Vercel + Stripe/Brevo production wiring + E2E
 
 **Files:**
 - Create: `vercel.json` only if needed (template pattern usually needs none); `docs/runbook.md`
@@ -1758,7 +1789,7 @@ async function uploadTo(slot: string, file: File) {
 ```bash
 npx vercel link   # or connect the GitHub repo in Vercel dashboard
 ```
-Set all env vars from `.env.example` in Vercel (Production + Preview): Supabase pair ×2, Stripe test keys first, `RESEND_API_KEY`, `ADMIN_EMAILS`, `SITE_URL` = deployment URL.
+Set all env vars from `.env.example` in Vercel (Production + Preview): Supabase pair ×2, Stripe test keys first, `BREVO_API_KEY`, `EMAIL_FROM`, `ADMIN_EMAILS`, `SITE_URL` = deployment URL.
 
 - [ ] **Step 2: Deploy + verify hybrid**
 
@@ -1774,7 +1805,7 @@ Checklist: order 2 packs → iDEAL test payment → confirmed page shows ref →
 
 - [ ] **Step 5: Go-live switches (when Moritz says so, not before)**
 
-Stripe live keys + live webhook endpoint + iDEAL enabled in live mode; `SITE_URL` to final domain; Resend custom domain (then change `FROM` in `api/_lib/emails.py`); custom domain in Vercel.
+Stripe live keys + live webhook endpoint + iDEAL enabled in live mode; `SITE_URL` to final domain; Brevo domain authentication for the sender domain (better deliverability; EMAIL_FROM stays an env var); custom domain in Vercel.
 
 - [ ] **Step 6: Runbook + commit**
 
