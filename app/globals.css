@@ -131,3 +131,46 @@ textarea {
   .sd-hero-img { margin-top: 22px; }
   .sd-hero-cta { margin-top: 22px; }
 }
+
+/* Mobile nav: burger + dropdown panel */
+.sd-nav-links { display: flex; align-items: center; gap: clamp(10px, 2vw, 22px); }
+.sd-nav-burger {
+  display: none;
+  background: none;
+  border: 1px solid #7c3a35;
+  color: #fdf6e8;
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .sd-nav-links { display: none; }
+  .sd-nav-links.open {
+    display: flex;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    background: #5e1d22;
+    padding: 6px 18px 14px;
+    gap: 2px;
+    border-bottom: 1px solid #7c3a35;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+  }
+  .sd-nav-links.open .sd-nav-link { padding: 12px 2px; font-size: 15px; }
+  .sd-nav-burger { display: block; }
+  .sd-ticker { padding: 6px 0 !important; }
+  .sd-ticker-inner { font-size: 10.5px !important; letter-spacing: 0.1em !important; }
+}
+
+/* Dish quantity stepper: center the count, slim down on mobile */
+.sd-stepper { justify-content: space-between; }
+.sd-stepper .sd-qty-count { flex: 1 1 auto; text-align: center; }
+@media (max-width: 760px) {
+  .sd-stepper .sd-qty-dec, .sd-stepper .sd-qty-inc { width: 38px !important; height: 38px !important; font-size: 19px !important; }
+  .sd-stepper .sd-qty-count { font-size: 15px !important; }
+}

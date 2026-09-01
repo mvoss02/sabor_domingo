@@ -340,6 +340,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                       </p>
                     </div>
                     <div
+                      className="sd-stepper"
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -370,7 +371,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                       >
                         –
                       </button>
-                      <span style={{ minWidth: 26, textAlign: "center", fontWeight: 700, fontSize: 17, color: "#5e1d22" }}>
+                      <span className="sd-qty-count" style={{ minWidth: 26, textAlign: "center", fontWeight: 700, fontSize: 17, color: "#5e1d22" }}>
                         {qty}
                       </span>
                       <button

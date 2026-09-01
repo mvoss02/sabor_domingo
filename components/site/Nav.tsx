@@ -1,3 +1,6 @@
+"use client";
+import { useState } from "react";
+
 const TICKER_ITEMS = [
   "Como en casa, but in Amsterdam",
   "More than tacos, more than guisos",
@@ -5,7 +8,15 @@ const TICKER_ITEMS = [
   "Delivered Mon → Wed",
 ];
 
+const LINKS = [
+  { href: "#howitworks", label: "How it works" },
+  { href: "#us", label: "About us" },
+  { href: "#business", label: "Events" },
+];
+
 export default function Nav() {
+  const [open, setOpen] = useState(false);
+
   return (
     <div>
       <header
@@ -31,18 +42,23 @@ export default function Nav() {
           />
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: "clamp(10px, 2vw, 22px)" }}>
-          <a href="#howitworks" className="sd-nav-link" style={{ fontSize: 13.5, fontWeight: 500, color: "#fdf6e8" }}>
-            How it works
-          </a>
-          <a href="#us" className="sd-nav-link" style={{ fontSize: 13.5, fontWeight: 500, color: "#fdf6e8" }}>
-            About us
-          </a>
-          <a href="#business" className="sd-nav-link" style={{ fontSize: 13.5, fontWeight: 500, color: "#fdf6e8" }}>
-            Events
-          </a>
+          <nav className={`sd-nav-links${open ? " open" : ""}`}>
+            {LINKS.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                className="sd-nav-link"
+                onClick={() => setOpen(false)}
+                style={{ fontSize: 13.5, fontWeight: 500, color: "#fdf6e8" }}
+              >
+                {l.label}
+              </a>
+            ))}
+          </nav>
           <a
             href="#order"
             className="sd-cta-order"
+            onClick={() => setOpen(false)}
             style={{
               background: "#c8492a",
               color: "#fdf6e8",
@@ -55,19 +71,21 @@ export default function Nav() {
           >
             Order now
           </a>
+          <button
+            type="button"
+            className="sd-nav-burger"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+          >
+            {open ? "✕" : "☰"}
+          </button>
         </div>
       </header>
 
-      <div
-        style={{
-          background: "#c8492a",
-          color: "#fdf6e8",
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-          padding: "9px 0",
-        }}
-      >
+      <div className="sd-ticker" style={{ background: "#c8492a", color: "#fdf6e8", overflow: "hidden", whiteSpace: "nowrap", padding: "9px 0" }}>
         <div
+          className="sd-ticker-inner"
           style={{
             display: "inline-block",
             animation: "sdrun 34s linear infinite",
