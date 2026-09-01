@@ -29,6 +29,10 @@ export default function EventsForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, type, guests, message }),
       });
+      if (!res.ok) {
+        setError("Something went wrong. Please try again.");
+        return;
+      }
       const data = await res.json();
       if (data.ok) {
         setSent(true);
