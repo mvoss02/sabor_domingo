@@ -33,7 +33,8 @@ function Confirmed() {
     if (!sessionId) return;
     let stop = false;
     (async () => {
-      for (let tries = 0; tries < 10 && !stop; tries++) {
+      // fast polling for ~20s, then slow polling forever (iDEAL can lag minutes)
+      for (let tries = 0; !stop; tries++) {
         try {
           const res = await fetch(`/api/py/order-status?session_id=${encodeURIComponent(sessionId)}`);
           if (res.ok) {
@@ -46,9 +47,9 @@ function Confirmed() {
         } catch {
           // transient; keep polling
         }
-        await new Promise((r) => setTimeout(r, 2000));
+        if (tries === 9) setState("pending");
+        await new Promise((r) => setTimeout(r, tries < 9 ? 2000 : 10000));
       }
-      if (!stop) setState("pending");
     })();
     return () => {
       stop = true;
