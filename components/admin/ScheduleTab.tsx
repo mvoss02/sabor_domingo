@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { adminButton, adminCard, adminInput, adminLabel } from "@/components/admin/ui";
+import { adminButton, adminCard, adminChip, adminInput, adminLabel } from "@/components/admin/ui";
 import { DAY_ORDER } from "@/lib/window";
 import type { Settings } from "@/lib/types";
 
@@ -166,16 +166,7 @@ export default function ScheduleTab() {
                       key={d}
                       type="button"
                       onClick={() => toggleDeliveryDay(d)}
-                      style={{
-                        padding: "8px 14px",
-                        borderRadius: 999,
-                        border: `1px solid ${on ? "#c8492a" : "#ece0cb"}`,
-                        background: on ? "#c8492a" : "transparent",
-                        color: on ? "#fdf6e8" : "#5e1d22",
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
+                      style={adminChip(on)}
                     >
                       {d.slice(0, 3)}
                     </button>

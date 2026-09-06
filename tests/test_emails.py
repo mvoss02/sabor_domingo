@@ -69,3 +69,18 @@ def test_order_email_html_branded_and_escaped(monkeypatch):
         assert "logo-white.png" in html
         assert "<script>" not in html
         assert "&lt;script&gt;" in html
+
+
+def test_refund_email_full_vs_partial(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    with patch.object(emails, "_send") as send:
+        emails.send_refund_email(ORDER, 89.5, full=True)
+        kw = send.call_args.kwargs
+        assert kw["to"] == ["ana@example.com"]
+        assert "€89.50" in kw["subject"]
+        assert "cancelled" in kw["text"]
+        emails.send_refund_email(ORDER, 10, full=False)
+        kw = send.call_args.kwargs
+        assert "€10.00" in kw["text"]
+        assert "stays as planned" in kw["text"]

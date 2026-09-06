@@ -6,9 +6,24 @@ export const adminInput: CSSProperties = {
   border: "1px solid #ece0cb",
   borderRadius: 8,
   background: "#f6eee0",
-  fontSize: 15,
+  // 16px minimum: iOS Safari auto-zooms the page on focus for anything smaller.
+  fontSize: 16,
   color: "#3d1f18",
 };
+
+// Filter chip; 40px tall so it's a comfortable thumb target.
+export const adminChip = (active: boolean): CSSProperties => ({
+  minHeight: 40,
+  padding: "8px 14px",
+  borderRadius: 999,
+  border: `1px solid ${active ? "#c8492a" : "#ece0cb"}`,
+  background: active ? "#c8492a" : "transparent",
+  color: active ? "#fdf6e8" : "#5e1d22",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+});
 
 export const adminLabel: CSSProperties = {
   fontSize: 10,

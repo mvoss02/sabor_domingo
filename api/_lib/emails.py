@@ -146,6 +146,30 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
     )
 
 
+def send_refund_email(order: dict, amount: float, full: bool) -> None:
+    ref = f"#SD-{order['ref_num']}"
+    tail = ("Your order is cancelled — nothing will be delivered."
+            if full else "The rest of your order stays as planned.")
+    _send(
+        subject=f"Refund of €{_eur(amount)} for your Sabor Domingo order {ref}",
+        text=(
+            f"Hola {order['name']},\n\n"
+            f"We've refunded €{_eur(amount)} for order {ref} to your original payment method. "
+            f"It usually shows up within 5–10 business days, depending on your bank.\n\n"
+            f"{tail}\n\nUn apapacho,\nMaca & Clau"
+        ),
+        to=[order["email"]],
+        html=_html_wrap(
+            f'<h1 style="font-size:22px;letter-spacing:-0.02em;color:#5e1d22;margin:0 0 14px;">Refund on its way</h1>'
+            f'<p style="margin:0 0 14px;">Hola {_esc(order["name"])}, we&rsquo;ve refunded '
+            f'<strong>&euro;{_eur(amount)}</strong> for order <strong>{ref}</strong> to your original payment method. '
+            f'It usually shows up within 5&ndash;10 business days, depending on your bank.</p>'
+            f'<p style="margin:0 0 14px;">{_esc(tail)}</p>'
+            f'<p style="margin:14px 0 0;font-family:Georgia,serif;font-size:17px;color:#c8492a;">Un apapacho,<br>Maca &amp; Clau</p>'
+        ),
+    )
+
+
 def send_inquiry_notification(inquiry: dict) -> None:
     _send(
         subject=f"Event inquiry — {inquiry['name']} ({inquiry['type']})",

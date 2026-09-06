@@ -163,8 +163,8 @@ textarea {
   }
   .sd-nav-links.open .sd-nav-link { padding: 12px 2px; font-size: 15px; }
   .sd-nav-burger { display: block; }
-  .sd-ticker { padding: 6px 0 !important; }
-  .sd-ticker-inner { font-size: 10.5px !important; letter-spacing: 0.1em !important; }
+  .sd-ticker { padding: 4px 0 !important; }
+  .sd-ticker-inner { font-size: 10px !important; letter-spacing: 0.1em !important; }
 }
 
 /* Dish quantity stepper: center the count, slim down on mobile */
@@ -177,4 +177,87 @@ textarea {
 
 @media (max-width: 720px) {
   .sd-hero-imgbox { margin: 0 auto !important; }
+}
+
+/* Admin shell: sticky bar, tab pills on desktop, burger + dropdown on phone */
+.sd-admin-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #5e1d22;
+  color: #fdf6e8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px clamp(14px, 4vw, 40px);
+}
+.sd-admin-current { display: none; color: #e0cdb8; font-size: 14px; font-weight: 600; }
+.sd-admin-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.sd-admin-tab {
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid #7c3a35;
+  background: transparent;
+  color: #e0cdb8;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.sd-admin-tab.active { background: #f2a63b; border-color: #f2a63b; color: #4a1519; }
+.sd-admin-tab.exit { color: #a1806f; }
+.sd-admin-burger {
+  display: none;
+  background: none;
+  border: 1px solid #7c3a35;
+  color: #fdf6e8;
+  border-radius: 8px;
+  padding: 9px 13px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .sd-admin-current { display: inline; }
+  .sd-admin-burger { display: block; }
+  .sd-admin-tabs { display: none; }
+  .sd-admin-tabs.open {
+    display: flex;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    gap: 4px;
+    background: #5e1d22;
+    padding: 8px 14px 14px;
+    border-bottom: 1px solid #7c3a35;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+  }
+  .sd-admin-tabs.open .sd-admin-tab {
+    width: 100%;
+    text-align: left;
+    padding: 14px 16px;
+    font-size: 14px;
+    border-radius: 10px;
+    border-color: transparent;
+  }
+  .sd-admin-tabs.open .sd-admin-tab.exit { margin-top: 6px; border-top: 1px solid #7c3a35; border-radius: 0; }
+}
+
+/* Admin filter chips: horizontal scroll strip on phone instead of a 4-row wrap */
+.sd-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 760px) {
+  .sd-chip-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -14px;
+    padding: 0 14px;
+  }
+  .sd-chip-row::-webkit-scrollbar { display: none; }
+  .sd-chip-row > * { flex: 0 0 auto; }
 }

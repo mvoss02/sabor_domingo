@@ -58,7 +58,7 @@ export default function Bios({ images }: { images: ImageSlots }) {
                 margin: "0 0 8px",
               }}
             >
-              More than tacos, more than guisos
+              more than tacos, more than guisos
             </p>
             <h2
               style={{

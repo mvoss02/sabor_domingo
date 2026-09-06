@@ -1,14 +1,16 @@
 import os
 
 import stripe
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
+from api._lib.admin_auth import require_admin
 from api._lib.config import env
 from api._lib.db import get_client
 from api._lib.emails import send_inquiry_notification, subscribe_contact
 from api._lib.orders import CheckoutPayload, WindowClosed, create_checkout
 from api._lib.pricing import CartError
+from api._lib.refunds import OrderNotFound, RefundError, RefundPayload, refund_order
 from api._lib.webhook import handle_event
 
 _prod = os.environ.get("VERCEL_ENV") == "production"
@@ -73,6 +75,16 @@ def subscribe(payload: SubscribePayload):
         print(f"subscribe failed: {e}")
         raise HTTPException(status_code=502, detail="Could not subscribe right now.")
     return {"ok": True}
+
+
+@app.post("/api/py/admin/orders/{order_id}/refund")
+def admin_refund(order_id: str, payload: RefundPayload, admin: str = Depends(require_admin)):
+    try:
+        return refund_order(order_id, payload, by=admin)
+    except OrderNotFound:
+        raise HTTPException(status_code=404, detail="Order not found")
+    except RefundError as e:
+        raise HTTPException(status_code=400, detail=e.message)
 
 
 @app.get("/api/py/order-status")

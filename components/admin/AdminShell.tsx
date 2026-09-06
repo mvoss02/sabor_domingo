@@ -1,5 +1,5 @@
 "use client";
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { supabase } from "@/lib/supabase";
 import MenuTab from "@/components/admin/MenuTab";
 import ScheduleTab from "@/components/admin/ScheduleTab";
@@ -10,92 +10,81 @@ import InquiriesTab from "@/components/admin/InquiriesTab";
 
 export type TabKey = "menu" | "orders" | "schedule" | "images" | "content" | "inquiries";
 
-const TABS: { key: TabKey; label: string; component: ComponentType | null }[] = [
-  { key: "menu", label: "Menu", component: MenuTab },
+const TABS: { key: TabKey; label: string; component: ComponentType }[] = [
   { key: "orders", label: "Orders", component: OrdersTab },
+  { key: "menu", label: "Menu", component: MenuTab },
   { key: "schedule", label: "Schedule", component: ScheduleTab },
   { key: "images", label: "Images", component: ImagesTab },
   { key: "content", label: "Content", component: ContentTab },
   { key: "inquiries", label: "Inquiries", component: InquiriesTab },
 ];
 
+function isTabKey(v: string): v is TabKey {
+  return TABS.some((t) => t.key === v);
+}
+
+// The active tab lives in the URL hash (#orders) so a refresh or a bookmark
+// on the phone lands on the same tab. AdminShell only mounts client-side
+// (after the session check), so reading window here is safe.
+function initialTab(): TabKey {
+  if (typeof window === "undefined") return "orders";
+  const h = window.location.hash.replace("#", "");
+  return isTabKey(h) ? h : "orders";
+}
+
 export default function AdminShell() {
-  const [tab, setTab] = useState<TabKey>("menu");
-  const Active = TABS.find((t) => t.key === tab)?.component ?? null;
+  const [tab, setTab] = useState<TabKey>(initialTab);
+  const [open, setOpen] = useState(false);
+  const active = TABS.find((t) => t.key === tab) ?? TABS[0];
+  const Active = active.component;
+
+  useEffect(() => {
+    window.history.replaceState(null, "", `#${tab}`);
+  }, [tab]);
+
+  function pick(key: TabKey) {
+    setTab(key);
+    setOpen(false);
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f6eee0" }}>
-      <header
-        style={{
-          background: "#5e1d22",
-          color: "#fdf6e8",
-          padding: "12px clamp(14px, 4vw, 40px)",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 12,
-          alignItems: "center",
-          justifyContent: "space-between",
-          position: "sticky",
-          top: 0,
-          zIndex: 30,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 9 }}>
+      <header className="sd-admin-header">
+        <div style={{ display: "flex", alignItems: "baseline", gap: 9, minWidth: 0 }}>
           <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: "0.08em" }}>SABOR</span>
           <span style={{ fontFamily: "'Caveat Brush', cursive", fontSize: 18, color: "#f2a63b" }}>panel</span>
+          <span className="sd-admin-current">· {active.label}</span>
         </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {TABS.map((t) => {
-            const active = t.key === tab;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTab(t.key)}
-                style={{
-                  padding: "9px 16px",
-                  borderRadius: 999,
-                  border: `1px solid ${active ? "#f2a63b" : "#7c3a35"}`,
-                  background: active ? "#f2a63b" : "transparent",
-                  color: active ? "#4a1519" : "#e0cdb8",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => supabase.auth.signOut()}
-            style={{
-              padding: "9px 16px",
-              borderRadius: 999,
-              border: "1px solid #7c3a35",
-              background: "transparent",
-              color: "#a1806f",
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-            }}
-          >
+
+        <nav className={`sd-admin-tabs${open ? " open" : ""}`} aria-label="Admin sections">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`sd-admin-tab${t.key === tab ? " active" : ""}`}
+              onClick={() => pick(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+          <button type="button" className="sd-admin-tab exit" onClick={() => supabase.auth.signOut()}>
             Exit
           </button>
-        </div>
+        </nav>
+
+        <button
+          type="button"
+          className="sd-admin-burger"
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          {open ? "✕" : "☰"}
+        </button>
       </header>
 
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "clamp(20px, 4vw, 40px) clamp(16px, 4vw, 40px) 80px" }}>
-        {Active ? (
-          <Active />
-        ) : (
-          <p style={{ color: "#a1806f", fontSize: 14 }}>This tab is coming next.</p>
-        )}
+      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "clamp(18px, 4vw, 40px) clamp(14px, 4vw, 40px) 80px" }}>
+        <Active />
       </div>
     </div>
   );

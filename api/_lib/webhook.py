@@ -74,4 +74,8 @@ def handle_event(event: dict) -> str:
         order = _transition(client, obj, "cancelled")
         return "cancelled" if order else "ignored"
 
+    if kind == "charge.refunded":
+        from api._lib.refunds import sync_charge_refund
+        return sync_charge_refund(client, obj)
+
     return "ignored"
