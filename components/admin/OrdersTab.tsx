@@ -8,10 +8,18 @@ import type { Order, Settings } from "@/lib/types";
 
 type View = { mode: "cycle"; cook: string } | { mode: "range"; from: string; to: string } | { mode: "all" };
 
-const STATUS_FILTERS = ["paid", "pending_payment", "cancelled", "refunded", "all"] as const;
+// "active" = paid + refunded: a refunded order stays visible (greyed) instead
+// of vanishing from the list the moment it's cancelled.
+const STATUS_FILTERS = ["active", "pending_payment", "cancelled", "refunded", "all"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
-const STATUS_LABEL: Record<string, string> = { pending_payment: "pending" };
+const STATUS_LABEL: Record<string, string> = { active: "orders", pending_payment: "pending" };
+
+function matchesStatus(o: Order, f: StatusFilter): boolean {
+  if (f === "all") return true;
+  if (f === "active") return o.status === "paid" || o.status === "refunded";
+  return o.status === f;
+}
 
 const muted: React.CSSProperties = { color: "#a1806f", fontSize: 12.5 };
 const h2: React.CSSProperties = { fontWeight: 600, fontSize: 15, margin: "0 0 8px", color: "#c8492a" };
@@ -34,7 +42,7 @@ function closeDateOf(cook: string, settings: Settings): string {
 export default function OrdersTab() {
   const [rawOrders, setRawOrders] = useState<Order[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("paid");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [dayFilter, setDayFilter] = useState<string>("all");
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +50,7 @@ export default function OrdersTab() {
   useEffect(() => {
     supabase
       .from("orders")
-      .select("*, order_items(*)")
+      .select("*, order_items(*), order_refunds(*)")
       .order("created_at", { ascending: false })
       .limit(300)
       .then(({ data, error }) => {
@@ -110,14 +118,10 @@ export default function OrdersTab() {
   }, [effectiveView, settings, viewOrders]);
 
   const ordersOn = (d: string) =>
-    viewOrders.filter(
-      (o) => (statusFilter === "all" || o.status === statusFilter) && deliveryDate(o.cook_date, o.delivery_day) === d
-    ).length;
+    viewOrders.filter((o) => matchesStatus(o, statusFilter) && deliveryDate(o.cook_date, o.delivery_day) === d).length;
 
   const filtered = viewOrders.filter(
-    (o) =>
-      (statusFilter === "all" || o.status === statusFilter) &&
-      (dayFilter === "all" || deliveryDate(o.cook_date, o.delivery_day) === dayFilter)
+    (o) => matchesStatus(o, statusFilter) && (dayFilter === "all" || deliveryDate(o.cook_date, o.delivery_day) === dayFilter)
   );
 
   // What to cook: meals per dish across PAID orders in view (respecting day filter).

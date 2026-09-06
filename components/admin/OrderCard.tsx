@@ -52,6 +52,8 @@ export default function OrderCard({
   const refunded = Number(o.refunded_total ?? 0);
   const remaining = round2(Number(o.total) - refunded);
   const canAct = o.status === "paid";
+  const inactive = o.status === "refunded" || o.status === "cancelled";
+  const refunds = [...(o.order_refunds ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
 
   function openRefund(amount: number | null) {
     setRefundPrefill(amount);
@@ -59,8 +61,8 @@ export default function OrderCard({
   }
 
   return (
-    <div style={{ ...adminCard, display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+    <div style={{ ...adminCard, display: "flex", flexDirection: "column", gap: 6, opacity: inactive ? 0.6 : 1 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontWeight: 700, fontSize: 16, color: "#5e1d22" }}>#SD-{o.ref_num}</span>
         <span
           style={{
@@ -72,14 +74,26 @@ export default function OrderCard({
             color: badge.fg,
             borderRadius: 999,
             padding: "3px 9px",
+            marginTop: 2,
           }}
         >
           {STATUS_LABEL[o.status] ?? o.status}
         </span>
         {o.status === "paid" && refunded > 0 && (
-          <span style={{ ...muted, fontWeight: 600, color: "#c8492a" }}>{eur(refunded)} refunded</span>
+          <span style={{ ...muted, fontWeight: 600, color: "#c8492a", marginTop: 3 }}>partly refunded</span>
         )}
-        <span style={{ marginLeft: "auto", fontWeight: 700, fontSize: 17, color: "#5e1d22" }}>{eur(o.total)}</span>
+        {/* Money: what they paid, what went back, what we keep. */}
+        <div style={{ marginLeft: "auto", textAlign: "right", fontSize: 13, lineHeight: 1.45, color: "#5e1d22" }}>
+          {refunded > 0 ? (
+            <>
+              <div style={{ color: "#a1806f" }}>paid {eur(o.total)}</div>
+              <div style={{ color: "#c8492a", fontWeight: 600 }}>− {eur(refunded)} refunded</div>
+              <div style={{ fontWeight: 700, fontSize: 17 }}>{eur(remaining)} kept</div>
+            </>
+          ) : (
+            <div style={{ fontWeight: 700, fontSize: 17 }}>{eur(o.total)}</div>
+          )}
+        </div>
       </div>
 
       <div style={{ fontSize: 14, lineHeight: 1.6, color: "#5e1d22", overflowWrap: "anywhere" }}>
@@ -105,6 +119,19 @@ export default function OrderCard({
           </>
         )}
       </div>
+
+      {refunds.length > 0 && (
+        <div style={{ fontSize: 13, color: "#c8492a", lineHeight: 1.6 }}>
+          {refunds.map((r) => (
+            <div key={r.id ?? r.created_at}>
+              <strong>{eur(Number(r.amount))}</strong> refunded{" "}
+              {new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              {r.reason && <> · “{r.reason}”</>}
+              {r.refunded_by && <span style={{ color: "#a1806f" }}> · {r.refunded_by}</span>}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ ...muted, display: "flex", flexWrap: "wrap", gap: "2px 14px", alignItems: "center" }}>
         <span>
@@ -333,6 +360,7 @@ function RefundPanel({
   const [amount, setAmount] = useState<string>(String(prefill ?? remaining));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const amt = round2(Number(amount));
@@ -341,8 +369,6 @@ function RefundPanel({
 
   async function run() {
     if (!valid) return;
-    const what = full ? `Refund the full ${eur(amt)} and cancel order #SD-${o.ref_num}?` : `Refund ${eur(amt)} of order #SD-${o.ref_num}?`;
-    if (!window.confirm(what)) return;
     setBusy(true);
     setMsg(null);
     const { data } = await supabase.auth.getSession();
@@ -358,8 +384,14 @@ function RefundPanel({
     });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) return setMsg(`Error: ${body.detail ?? res.statusText}`);
-    onDone({ ...o, status: body.status, refunded_total: body.refunded_total });
+    if (!res.ok) {
+      setConfirming(false);
+      return setMsg(`Error: ${body.detail ?? res.statusText}`);
+    }
+    const logged = body.refund
+      ? [...(o.order_refunds ?? []), { created_at: new Date().toISOString(), ...body.refund }]
+      : o.order_refunds;
+    onDone({ ...o, status: body.status, refunded_total: body.refunded_total, order_refunds: logged });
   }
 
   return (
@@ -379,16 +411,33 @@ function RefundPanel({
           <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="customer cancelled / wrong dish / …" style={adminInput} />
         </label>
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <button type="button" style={dangerButton} onClick={run} disabled={busy || !valid}>
-          {busy ? "Refunding…" : full ? `Refund all ${eur(amt)} & cancel` : valid ? `Refund ${eur(amt)}` : "Enter an amount"}
-        </button>
-        {!full && valid && (
-          <button type="button" style={outlineButton} onClick={() => setAmount(String(remaining))}>
-            Full refund instead
+      {/* Two-tap confirm inside the card, no browser dialog. */}
+      {!confirming ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button type="button" style={dangerButton} onClick={() => setConfirming(true)} disabled={!valid}>
+            {full ? `Refund all ${eur(amt)} & cancel` : valid ? `Refund ${eur(amt)}` : "Enter an amount"}
           </button>
-        )}
-      </div>
+          {!full && valid && (
+            <button type="button" style={outlineButton} onClick={() => setAmount(String(remaining))}>
+              Full refund instead
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", background: "#f6eee0", borderRadius: 10, padding: "10px 12px" }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#5e1d22", flex: "1 1 200px" }}>
+            {full
+              ? `Send ${eur(amt)} back to the customer and cancel #SD-${o.ref_num}? This can't be undone.`
+              : `Send ${eur(amt)} back to the customer for #SD-${o.ref_num}? This can't be undone.`}
+          </span>
+          <button type="button" style={dangerButton} onClick={run} disabled={busy}>
+            {busy ? "Refunding…" : "Yes, refund"}
+          </button>
+          <button type="button" style={outlineButton} onClick={() => setConfirming(false)} disabled={busy}>
+            No, go back
+          </button>
+        </div>
+      )}
       {msg && <p style={{ fontSize: 13.5, fontWeight: 600, margin: 0, color: "#c8492a" }}>{msg}</p>}
     </div>
   );

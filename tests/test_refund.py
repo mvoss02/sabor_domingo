@@ -12,14 +12,24 @@ PAID = {"id": "order-uuid-1", "ref_num": 241, "name": "Ana", "email": "ana@examp
         "stripe_payment_intent": "pi_1"}
 
 
-def db_with(order_rows):
+def db_with(order_rows, refund_rows=None):
+    """Per-table chainable mocks. `q` is the orders table (what the tests
+    inspect); `client.table("order_refunds")` returns its own mock."""
     client = MagicMock()
-    q = MagicMock()
-    for m in ("select", "eq", "update"):
-        getattr(q, m).return_value = q
-    q.execute.return_value = MagicMock(data=order_rows)
-    client.table.return_value = q
-    return client, q
+    tables: dict = {}
+
+    def table(name):
+        if name not in tables:
+            m = MagicMock()
+            for meth in ("select", "eq", "update", "upsert"):
+                getattr(m, meth).return_value = m
+            rows = order_rows if name == "orders" else (refund_rows or [])
+            m.execute.return_value = MagicMock(data=rows)
+            tables[name] = m
+        return tables[name]
+
+    client.table.side_effect = table
+    return client, table("orders")
 
 
 @pytest.fixture
@@ -31,7 +41,7 @@ def as_admin():
 
 def post(order_id, body, db):
     with patch.object(refunds, "get_client", return_value=db), \
-         patch.object(refunds.stripe.Refund, "create") as create, \
+         patch.object(refunds.stripe.Refund, "create", return_value=MagicMock(id="re_1")) as create, \
          patch("api._lib.emails.send_refund_email") as email:
         resp = TestClient(app).post(f"/api/py/admin/orders/{order_id}/refund", json=body)
     return resp, create, email
@@ -71,7 +81,13 @@ def test_full_refund(monkeypatch, as_admin):
     db, q = db_with([PAID])
     resp, create, email = post("order-uuid-1", {}, db)
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"status": "refunded", "refunded_total": 89.5, "refunded_now": 89.5}
+    body = resp.json()
+    assert (body["status"], body["refunded_total"], body["refunded_now"]) == ("refunded", 89.5, 89.5)
+    assert body["refund"]["stripe_refund_id"] == "re_1"
+    assert body["refund"]["refunded_by"] == "maca@x.com"
+    logged = db.table("order_refunds").upsert.call_args
+    assert logged.args[0]["amount"] == 89.5
+    assert logged.kwargs["on_conflict"] == "stripe_refund_id"
     kw = create.call_args.kwargs
     assert kw["payment_intent"] == "pi_1"
     assert kw["amount"] == 8950  # float 89.5 -> exact cents
@@ -101,7 +117,8 @@ def test_second_partial_refund_completes(monkeypatch, as_admin):
     assert resp.status_code == 200
     assert create.call_args.kwargs["amount"] == 950
     assert create.call_args.kwargs["idempotency_key"] == "refund-order-uuid-1-8000-950"
-    assert resp.json() == {"status": "refunded", "refunded_total": 89.5, "refunded_now": 9.5}
+    body = resp.json()
+    assert (body["status"], body["refunded_total"], body["refunded_now"]) == ("refunded", 89.5, 9.5)
 
 
 def test_amount_over_remaining_400(monkeypatch, as_admin):
@@ -149,7 +166,7 @@ def test_email_failure_still_returns_ok(monkeypatch, as_admin):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
     db, _ = db_with([PAID])
     with patch.object(refunds, "get_client", return_value=db), \
-         patch.object(refunds.stripe.Refund, "create"), \
+         patch.object(refunds.stripe.Refund, "create", return_value=MagicMock(id="re_1")), \
          patch("api._lib.emails.send_refund_email", side_effect=RuntimeError("brevo down")):
         resp = TestClient(app).post("/api/py/admin/orders/order-uuid-1/refund", json={})
     assert resp.status_code == 200
@@ -157,34 +174,62 @@ def test_email_failure_still_returns_ok(monkeypatch, as_admin):
 
 # --- webhook mirror -------------------------------------------------------------
 
-def charge_event(amount, amount_refunded, intent="pi_1"):
-    return {"type": "charge.refunded",
-            "data": {"object": {"id": "ch_1", "payment_intent": intent,
-                                "amount": amount, "amount_refunded": amount_refunded}}}
+def charge_event(amount, amount_refunded, intent="pi_1", refunds=None):
+    obj = {"id": "ch_1", "payment_intent": intent,
+           "amount": amount, "amount_refunded": amount_refunded}
+    if refunds is not None:
+        obj["refunds"] = {"data": refunds}
+    return {"type": "charge.refunded", "data": {"object": obj}}
 
 
-def test_webhook_full_refund_marks_refunded():
+REFUND_OBJ = {"id": "re_1", "amount": 8950, "created": 1757174400,
+              "metadata": {"reason": "customer cancelled", "by": "maca@x.com"}}
+
+
+def test_webhook_full_refund_marks_refunded_and_logs():
     from api._lib import webhook
     db, q = db_with([{"id": "order-uuid-1"}])
     with patch.object(webhook, "get_client", return_value=db):
-        assert webhook.handle_event(charge_event(8950, 8950)) == "refund_synced"
+        assert webhook.handle_event(charge_event(8950, 8950, refunds=[REFUND_OBJ])) == "refund_synced"
     assert q.update.call_args.args[0] == {"refunded_total": 89.5, "status": "refunded"}
     q.eq.assert_called_with("stripe_payment_intent", "pi_1")
+    rows = db.table("order_refunds").upsert.call_args.args[0]
+    assert rows == [{"order_id": "order-uuid-1", "stripe_refund_id": "re_1", "amount": 89.5,
+                     "reason": "customer cancelled", "refunded_by": "maca@x.com",
+                     "created_at": "2025-09-06T16:00:00+00:00"}]
 
 
 def test_webhook_partial_refund_only_updates_amount():
     from api._lib import webhook
     db, q = db_with([{"id": "order-uuid-1"}])
+    dash = {"id": "re_2", "amount": 1000, "created": 1757174400, "metadata": {}}
     with patch.object(webhook, "get_client", return_value=db):
-        assert webhook.handle_event(charge_event(8950, 1000)) == "refund_synced"
+        assert webhook.handle_event(charge_event(8950, 1000, refunds=[dash])) == "refund_synced"
     assert q.update.call_args.args[0] == {"refunded_total": 10.0}
+    rows = db.table("order_refunds").upsert.call_args.args[0]
+    assert rows[0]["refunded_by"] == "Stripe dashboard"
+
+
+def test_webhook_lists_refunds_when_not_embedded(monkeypatch):
+    # Newer Stripe API versions omit charge.refunds in the event payload.
+    from api._lib import webhook
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    db, _ = db_with([{"id": "order-uuid-1"}])
+    listing = MagicMock()
+    listing.auto_paging_iter.return_value = [REFUND_OBJ]
+    with patch.object(webhook, "get_client", return_value=db), \
+         patch.object(refunds.stripe.Refund, "list", return_value=listing) as lst:
+        assert webhook.handle_event(charge_event(8950, 8950)) == "refund_synced"
+    assert lst.call_args.kwargs["charge"] == "ch_1"
+    assert db.table("order_refunds").upsert.call_args.args[0][0]["stripe_refund_id"] == "re_1"
 
 
 def test_webhook_unknown_intent_ignored():
     from api._lib import webhook
     db, _ = db_with([])
     with patch.object(webhook, "get_client", return_value=db):
-        assert webhook.handle_event(charge_event(8950, 8950, intent="pi_unknown")) == "ignored"
+        assert webhook.handle_event(charge_event(8950, 8950, intent="pi_unknown", refunds=[])) == "ignored"
+    db.table("order_refunds").upsert.assert_not_called()
 
 
 def test_cents_is_exact():

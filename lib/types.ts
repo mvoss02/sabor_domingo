@@ -32,6 +32,16 @@ export interface OrderItem {
   unit_price: number;
 }
 
+export interface OrderRefund {
+  id: string;
+  order_id: string;
+  stripe_refund_id: string | null;
+  amount: number;
+  reason: string;
+  refunded_by: string;
+  created_at: string;
+}
+
 export interface Order {
   id: string;
   ref_num: number;
@@ -51,6 +61,7 @@ export interface Order {
   stripe_payment_intent: string | null;
   created_at: string;
   order_items: OrderItem[];
+  order_refunds?: OrderRefund[];
 }
 
 export interface HeroContent {

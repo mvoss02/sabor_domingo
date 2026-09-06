@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import stripe
@@ -60,7 +61,7 @@ def refund_order(order_id: str, payload: RefundPayload, by: str = "") -> dict:
         raise RefundError(f"Amount must be between €0.01 and €{remaining_c / 100:.2f}.")
 
     stripe.api_key = env("STRIPE_SECRET_KEY")
-    stripe.Refund.create(
+    refund = stripe.Refund.create(
         payment_intent=intent,
         amount=amount_c,
         metadata={"order_id": order_id, "reason": payload.reason[:500], "by": by},
@@ -74,19 +75,32 @@ def refund_order(order_id: str, payload: RefundPayload, by: str = "") -> dict:
         "status": new_status,
     }).eq("id", order_id).execute()
 
+    row = {
+        "order_id": order_id,
+        "stripe_refund_id": getattr(refund, "id", None),
+        "amount": amount_c / 100,
+        "reason": payload.reason[:500],
+        "refunded_by": by,
+    }
+    saved = (client.table("order_refunds")
+             .upsert(row, on_conflict="stripe_refund_id").execute().data)
+    refund_row = saved[0] if saved else row
+
     from api._lib.emails import send_refund_email
     try:
         send_refund_email(order, amount_c / 100, full=new_status == "refunded")
     except Exception as e:  # money moved; a failed email must not look like a failed refund
         print(f"refund email failed for order {order_id}: {e}")
 
-    return {"status": new_status, "refunded_total": new_done_c / 100, "refunded_now": amount_c / 100}
+    return {"status": new_status, "refunded_total": new_done_c / 100,
+            "refunded_now": amount_c / 100, "refund": refund_row}
 
 
 def sync_charge_refund(client, charge: dict) -> str:
     """Mirror a refund made anywhere (our endpoint or the Stripe dashboard)
-    onto the order row. Absolute values from the charge, so replays and
-    out-of-order deliveries converge on the same state."""
+    onto the order row and the order_refunds log. Absolute values from the
+    charge, so replays and out-of-order deliveries converge on the same
+    state; refund rows upsert on stripe_refund_id so nothing doubles."""
     intent = charge.get("payment_intent")
     if not intent:
         return "ignored"
@@ -97,4 +111,30 @@ def sync_charge_refund(client, charge: dict) -> str:
         patch["status"] = "refunded"
     updated = (client.table("orders").update(patch)
                .eq("stripe_payment_intent", intent).execute().data)
-    return "refund_synced" if updated else "ignored"
+    if not updated:
+        return "ignored"
+
+    order_id = updated[0]["id"]
+    rows = [{
+        "order_id": order_id,
+        "stripe_refund_id": r["id"],
+        "amount": int(r.get("amount") or 0) / 100,
+        "reason": (r.get("metadata") or {}).get("reason", ""),
+        "refunded_by": (r.get("metadata") or {}).get("by", "Stripe dashboard"),
+        "created_at": datetime.fromtimestamp(int(r["created"]), tz=timezone.utc).isoformat(),
+    } for r in _charge_refunds(charge) if r.get("id") and r.get("created")]
+    if rows:
+        client.table("order_refunds").upsert(rows, on_conflict="stripe_refund_id").execute()
+    return "refund_synced"
+
+
+def _charge_refunds(charge: dict) -> list[dict]:
+    """Refund objects for a charge. Recent Stripe API versions don't embed
+    `refunds` on the charge in webhook payloads any more, so fall back to
+    listing them."""
+    embedded = (charge.get("refunds") or {}).get("data")
+    if embedded is not None:
+        return [dict(r) for r in embedded]
+    stripe.api_key = env("STRIPE_SECRET_KEY")
+    return [r.to_dict() if hasattr(r, "to_dict") else dict(r)
+            for r in stripe.Refund.list(charge=charge["id"], limit=100).auto_paging_iter()]
