@@ -84,3 +84,35 @@ def test_refund_email_full_vs_partial(monkeypatch):
         kw = send.call_args.kwargs
         assert "€10.00" in kw["text"]
         assert "stays as planned" in kw["text"]
+
+
+def test_confirmation_uses_cook_date_not_hardcoded_monday(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
+    order = {**ORDER, "cook_date": "2026-09-07", "delivery_day": "Wednesday"}
+    with patch.object(emails, "_send") as send:
+        emails.send_order_emails(order, ITEMS)
+        text = send.call_args_list[0].kwargs["text"]
+        html = send.call_args_list[0].kwargs["html"]
+    assert "We cook on Monday 7 September and deliver on Wednesday 9 September evening." in text
+    assert "Wednesday 9 September evening" in html
+    assert "cook on Monday and" not in text
+
+
+def test_confirmation_without_cook_date_falls_back_to_weekday(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
+    with patch.object(emails, "_send") as send:
+        emails.send_order_emails(ORDER, ITEMS)  # ORDER has no cook_date
+        text = send.call_args_list[0].kwargs["text"]
+    assert "We deliver on Monday evening." in text
+    assert "cook on" not in text
+
+
+def test_cook_and_delivery_dates():
+    assert emails.cook_and_delivery({"cook_date": "2026-09-07", "delivery_day": "Monday"}) == \
+        ("Monday 7 September", "Monday 7 September")
+    assert emails.cook_and_delivery({"cook_date": "2026-09-07", "delivery_day": "Tuesday"}) == \
+        ("Monday 7 September", "Tuesday 8 September")

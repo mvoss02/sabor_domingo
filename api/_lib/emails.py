@@ -1,9 +1,11 @@
 import html as html_mod
+from datetime import date, timedelta
 from decimal import Decimal
 
 import httpx
 
 from api._lib.config import env
+from api._lib.window import DAYS
 
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 BREVO_CONTACTS_URL = "https://api.brevo.com/v3/contacts"
@@ -92,6 +94,35 @@ def _items_text(items: list[dict]) -> str:
         for i in items)
 
 
+def _long_date(d: date) -> str:
+    return f"{d:%A} {d.day} {d:%B}"  # "Monday 7 September"
+
+
+def cook_and_delivery(order: dict) -> tuple[str, str]:
+    """Human dates for the confirmation email, from the order's frozen
+    cook_date. Delivery is the named weekday on/after the cook date. Falls
+    back to weekday names if cook_date is missing (rows older than
+    migration 0008)."""
+    raw = order.get("cook_date")
+    delivery_day = order.get("delivery_day", "")
+    if not raw:
+        return "", delivery_day
+    cook = date.fromisoformat(str(raw))
+    try:
+        offset = (DAYS.index(delivery_day) - cook.weekday()) % 7
+    except ValueError:
+        return _long_date(cook), delivery_day
+    return _long_date(cook), _long_date(cook + timedelta(days=offset))
+
+
+def _schedule_sentence(order: dict, html: bool = False) -> str:
+    cook, deliver = cook_and_delivery(order)
+    deliver_s = f"<strong>{_esc(deliver)} evening</strong>" if html else f"{deliver} evening"
+    if cook:
+        return f"We cook on {_esc(cook) if html else cook} and deliver on {deliver_s}."
+    return f"We deliver on {deliver_s}."
+
+
 def send_order_emails(order: dict, items: list[dict]) -> None:
     ref = f"#SD-{order['ref_num']}"
 
@@ -99,8 +130,8 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
         subject=f"Your Sabor Domingo order {ref} is confirmed",
         text=(
             f"Hola {order['name']},\n\n"
-            f"Your order {ref} is confirmed. We cook on Monday and deliver on "
-            f"{order['delivery_day']} evening.\n\nYour pack:\n{_items_text(items)}\n\n"
+            f"Your order {ref} is confirmed. {_schedule_sentence(order)}"
+            f"\n\nYour pack:\n{_items_text(items)}\n\n"
             f"Total: €{_eur(order['total'])}\n\n"
             "Everything arrives chilled and portioned with reheating notes — "
             "fridge for 4 days, freezer for a month.\n\n"
@@ -111,7 +142,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f'<p style="font-family:Georgia,serif;font-size:22px;color:#c8492a;margin:0 0 4px;">&iexcl;gracias!</p>'
             f'<h1 style="font-size:24px;letter-spacing:-0.02em;color:#5e1d22;margin:0 0 14px;">Your order is in.</h1>'
             f'<p style="margin:0 0 18px;">Hola {_esc(order["name"])}, order <strong>{ref}</strong> is confirmed. '
-            f'We cook on Monday and deliver on <strong>{_esc(order["delivery_day"])} evening</strong>.</p>'
+            f'{_schedule_sentence(order, html=True)}</p>'
             f'{_items_html(items)}'
             f'<table style="width:100%;border-collapse:collapse;margin-top:10px;"><tr>'
             f'<td style="font-weight:600;font-size:15px;color:#5e1d22;">Total</td>'
