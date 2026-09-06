@@ -125,7 +125,7 @@ export default function OrderCard({
           {refunds.map((r) => (
             <div key={r.id ?? r.created_at}>
               <strong>{eur(Number(r.amount))}</strong> refunded{" "}
-              {new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              {new Date(r.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Amsterdam" })}
               {r.reason && <> · “{r.reason}”</>}
               {r.refunded_by && <span style={{ color: "#a1806f" }}> · {r.refunded_by}</span>}
             </div>
@@ -138,7 +138,16 @@ export default function OrderCard({
           Deliver <strong style={{ color: "#5e1d22" }}>{fmtDate(deliveryDate(o.cook_date, o.delivery_day))}</strong>
         </span>
         <span>Cook {fmtDate(o.cook_date)}</span>
-        <span>Ordered {new Date(o.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+        <span>
+          Ordered{" "}
+          {new Date(o.created_at).toLocaleString("en-GB", {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Europe/Amsterdam",
+          })}
+        </span>
         {canAct && (
           <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             <button type="button" style={outlineButton} onClick={() => setPanel(panel === "edit" ? "none" : "edit")}>
@@ -344,7 +353,9 @@ const stepBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
-// ---- Refund: full or partial, through the backend (Stripe).
+// ---- Refund: pick packs (amount computes, packs come off the order) or type
+// an amount. Money moves through the backend (Stripe) first; only then the
+// packs are removed, so a failed refund never touches the kitchen list.
 
 function RefundPanel({
   order: o,
@@ -357,15 +368,35 @@ function RefundPanel({
   prefill: number | null;
   onDone: (u: Order) => void;
 }) {
+  // How many of each pack line to refund (and remove).
+  const [picks, setPicks] = useState<Record<string, number>>({});
   const [amount, setAmount] = useState<string>(String(prefill ?? remaining));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const totalPacks = o.order_items.reduce((n, i) => n + i.qty, 0);
+  const pickedPacks = Object.values(picks).reduce((n, q) => n + q, 0);
+  const allPicked = totalPacks > 0 && pickedPacks === totalPacks;
+  const picksValue = round2(o.order_items.reduce((n, i) => n + (picks[i.id] ?? 0) * Number(i.unit_price), 0));
+
+  function pick(id: string, max: number, qty: number) {
+    const next = { ...picks, [id]: Math.min(max, Math.max(0, qty)) };
+    setPicks(next);
+    const packs = o.order_items.reduce((n, i) => n + (next[i.id] ?? 0), 0);
+    const value = round2(o.order_items.reduce((n, i) => n + (next[i.id] ?? 0) * Number(i.unit_price), 0));
+    // Everything picked = cancel the whole order, fee included.
+    setAmount(String(packs === totalPacks && totalPacks > 0 ? remaining : Math.min(value, remaining)));
+    setConfirming(false);
+  }
+
   const amt = round2(Number(amount));
   const valid = amt > 0 && amt <= remaining;
   const full = valid && amt === remaining;
+  // Packs are only removed on a partial refund; a cancelled order keeps its
+  // lines as the record of what was ordered.
+  const removing = !full && pickedPacks > 0 ? o.order_items.filter((i) => (picks[i.id] ?? 0) > 0) : [];
 
   async function run() {
     if (!valid) return;
@@ -377,22 +408,49 @@ function RefundPanel({
       setBusy(false);
       return setMsg("Error: session expired — log in again");
     }
+    const autoReason = removing.map((i) => `${picks[i.id]}× ${i.pack_size}-meal ${i.dish_name}`).join(", ");
     const res = await fetch(`/api/py/admin/orders/${o.id}/refund`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-      body: JSON.stringify({ amount: full ? null : amt, reason }),
+      body: JSON.stringify({ amount: full ? null : amt, reason: reason || (autoReason && `removed ${autoReason}`) }),
     });
     const body = await res.json().catch(() => ({}));
-    setBusy(false);
     if (!res.ok) {
+      setBusy(false);
       setConfirming(false);
       return setMsg(`Error: ${body.detail ?? res.statusText}`);
     }
     const logged = body.refund
       ? [...(o.order_refunds ?? []), { created_at: new Date().toISOString(), ...body.refund }]
       : o.order_refunds;
-    onDone({ ...o, status: body.status, refunded_total: body.refunded_total, order_refunds: logged });
+
+    // Money is back; now take the picked packs off the order.
+    let items = o.order_items;
+    let itemError: string | null = null;
+    for (const i of removing) {
+      const left = i.qty - (picks[i.id] ?? 0);
+      const r =
+        left <= 0
+          ? await supabase.from("order_items").delete().eq("id", i.id)
+          : await supabase.from("order_items").update({ qty: left }).eq("id", i.id);
+      if (r.error) {
+        itemError = r.error.message;
+        break;
+      }
+      items = left <= 0 ? items.filter((x) => x.id !== i.id) : items.map((x) => (x.id === i.id ? { ...x, qty: left } : x));
+    }
+    setBusy(false);
+    if (itemError) {
+      setMsg(`Refund of ${eur(amt)} done, but the packs could not be updated (${itemError}). Fix them with Edit.`);
+    }
+    onDone({ ...o, status: body.status, refunded_total: body.refunded_total, order_refunds: logged, order_items: items });
   }
+
+  const confirmText = full
+    ? `Send ${eur(amt)} back to the customer and cancel #SD-${o.ref_num}? This can't be undone.`
+    : removing.length > 0
+      ? `Send ${eur(amt)} back and remove ${removing.map((i) => `${picks[i.id]}× ${i.pack_size}-meal ${i.dish_name}`).join(", ")} from #SD-${o.ref_num}? This can't be undone.`
+      : `Send ${eur(amt)} back to the customer for #SD-${o.ref_num}? This can't be undone.`;
 
   return (
     <div style={{ borderTop: "1px solid #ece0cb", paddingTop: 12, marginTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -401,35 +459,92 @@ function RefundPanel({
         {Number(o.refunded_total) > 0 && <> · refunded {eur(Number(o.refunded_total))}</>} · up to{" "}
         <strong>{eur(remaining)}</strong> can go back. Money returns to the card via Stripe, usually within 5–10 business days.
       </div>
+
+      <div>
+        <span style={adminLabel}>Packs to refund &amp; remove</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {o.order_items.map((i) => {
+            const q = picks[i.id] ?? 0;
+            return (
+              <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "#5e1d22", flexWrap: "wrap" }}>
+                <button type="button" style={stepBtn} onClick={() => pick(i.id, i.qty, q - 1)} aria-label="one less" disabled={q === 0}>
+                  −
+                </button>
+                <strong style={{ width: 44, textAlign: "center" }}>
+                  {q} / {i.qty}
+                </strong>
+                <button type="button" style={stepBtn} onClick={() => pick(i.id, i.qty, q + 1)} aria-label="one more" disabled={q >= i.qty}>
+                  +
+                </button>
+                <span style={{ color: q > 0 ? "#c8492a" : "#5e1d22", fontWeight: q > 0 ? 600 : 400 }}>
+                  {i.pack_size}-meal · {i.dish_name} · {eur(Number(i.unit_price))} each
+                  {q > 0 && <> → {eur(round2(q * Number(i.unit_price)))}</>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {pickedPacks > 0 && (
+          <div style={{ fontSize: 13, color: "#a1806f", marginTop: 6 }}>
+            {allPicked
+              ? `All packs picked: full refund of ${eur(remaining)}, order fee included.`
+              : `Packs worth ${eur(picksValue)}; the ${eur(Number(o.fee))} order fee stays.`}
+          </div>
+        )}
+      </div>
+
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
         <label style={{ display: "block", flex: "0 1 140px" }}>
-          <span style={adminLabel}>Amount €</span>
-          <input type="number" inputMode="decimal" step="0.01" min="0.01" max={remaining} value={amount} onChange={(e) => setAmount(e.target.value)} style={adminInput} />
+          <span style={adminLabel}>Amount € {pickedPacks > 0 ? "(from packs, editable)" : ""}</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0.01"
+            max={remaining}
+            value={amount}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              setConfirming(false);
+            }}
+            style={adminInput}
+          />
         </label>
         <label style={{ display: "block", flex: "1 1 220px" }}>
           <span style={adminLabel}>Reason (for your records)</span>
-          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="customer cancelled / wrong dish / …" style={adminInput} />
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={removing.length > 0 ? "optional, packs are noted automatically" : "customer cancelled / wrong dish / …"}
+            style={adminInput}
+          />
         </label>
       </div>
+
       {/* Two-tap confirm inside the card, no browser dialog. */}
       {!confirming ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button type="button" style={dangerButton} onClick={() => setConfirming(true)} disabled={!valid}>
-            {full ? `Refund all ${eur(amt)} & cancel` : valid ? `Refund ${eur(amt)}` : "Enter an amount"}
+            {full ? `Refund all ${eur(amt)} & cancel` : valid ? `Refund ${eur(amt)}` : "Pick packs or enter an amount"}
           </button>
-          {!full && valid && (
-            <button type="button" style={outlineButton} onClick={() => setAmount(String(remaining))}>
-              Full refund instead
+          {!full && (
+            <button
+              type="button"
+              style={outlineButton}
+              onClick={() => {
+                setPicks(Object.fromEntries(o.order_items.map((i) => [i.id, i.qty])));
+                setAmount(String(remaining));
+                setConfirming(false);
+              }}
+            >
+              Cancel whole order
             </button>
           )}
         </div>
       ) : (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", background: "#f6eee0", borderRadius: 10, padding: "10px 12px" }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#5e1d22", flex: "1 1 200px" }}>
-            {full
-              ? `Send ${eur(amt)} back to the customer and cancel #SD-${o.ref_num}? This can't be undone.`
-              : `Send ${eur(amt)} back to the customer for #SD-${o.ref_num}? This can't be undone.`}
-          </span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#5e1d22", flex: "1 1 200px" }}>{confirmText}</span>
           <button type="button" style={dangerButton} onClick={run} disabled={busy}>
             {busy ? "Refunding…" : "Yes, refund"}
           </button>
