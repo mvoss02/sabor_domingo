@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { adminCard } from "@/components/admin/ui";
+import { adminCard, adminChip } from "@/components/admin/ui";
 import { eur } from "@/lib/window";
 
 type OrderItem = { pack_size: number; dish_name: string; qty: number; unit_price: number };
@@ -68,16 +68,7 @@ export default function OrdersTab() {
     return Object.entries(meals).sort((a, b) => b[1] - a[1]);
   }, [orders, dayFilter]);
 
-  const chip = (active: boolean): React.CSSProperties => ({
-    padding: "8px 14px",
-    borderRadius: 999,
-    border: `1px solid ${active ? "#c8492a" : "#ece0cb"}`,
-    background: active ? "#c8492a" : "transparent",
-    color: active ? "#fdf6e8" : "#5e1d22",
-    fontSize: 12.5,
-    fontWeight: 600,
-    cursor: "pointer",
-  });
+  const chip = adminChip;
 
   return (
     <div>
@@ -104,7 +95,7 @@ export default function OrdersTab() {
         </div>
       )}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+      <div className="sd-chip-row" style={{ marginBottom: 10 }}>
         {STATUS_FILTERS.map((f) => (
           <button key={f} type="button" onClick={() => setStatusFilter(f)} style={chip(statusFilter === f)}>
             {f === "pending_payment" ? "pending" : f}
