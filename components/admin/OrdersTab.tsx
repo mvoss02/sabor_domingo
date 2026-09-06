@@ -107,7 +107,10 @@ export default function OrdersTab() {
     return open[0] ?? cycles[0] ?? null;
   }, [cycles, settings, today]);
 
-  const effectiveView: View = view ?? (activeCycle ? { mode: "cycle", cook: activeCycle } : { mode: "all" });
+  const effectiveView = useMemo<View>(
+    () => view ?? (activeCycle ? { mode: "cycle", cook: activeCycle } : { mode: "all" }),
+    [view, activeCycle]
+  );
 
   const inView = (o: Order) => {
     const v = effectiveView;
