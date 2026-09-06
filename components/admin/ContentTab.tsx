@@ -37,7 +37,7 @@ export default function ContentTab() {
   }
 
   return (
-    <div>
+    <div style={{ maxWidth: 640, margin: "0 auto" }}>
       <h1 style={{ fontWeight: 700, fontSize: "clamp(24px, 4vw, 34px)", letterSpacing: "-0.03em", margin: "0 0 20px", color: "#5e1d22" }}>
         Site text
       </h1>
@@ -49,7 +49,7 @@ export default function ContentTab() {
       )}
 
       {hero && (
-        <div style={{ ...adminCard, maxWidth: 640, marginBottom: 24 }}>
+        <div style={{ ...adminCard, marginBottom: 24 }}>
           <h2 style={{ fontWeight: 600, fontSize: 16, margin: "0 0 14px", color: "#c8492a" }}>Hero (top of page)</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label style={{ display: "block" }}>
@@ -71,7 +71,7 @@ export default function ContentTab() {
         </div>
       )}
 
-      <div style={{ ...adminCard, maxWidth: 640 }}>
+      <div style={adminCard}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <h2 style={{ fontWeight: 600, fontSize: 16, margin: 0, color: "#c8492a" }}>Good to know (FAQ)</h2>
           <button
