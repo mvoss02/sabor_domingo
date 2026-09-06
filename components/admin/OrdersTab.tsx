@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { adminCard, adminChip } from "@/components/admin/ui";
-import { eur } from "@/lib/window";
+import { adminCard, adminChip, adminInput, adminLabel } from "@/components/admin/ui";
+import { DAY_ORDER, addDays, amsToday, cookDateFor, deliveryDate, eur, fmtDate, isWindowOpen, weekdayIdx } from "@/lib/window";
+import type { Settings } from "@/lib/types";
 
 type OrderItem = { pack_size: number; dish_name: string; qty: number; unit_price: number };
-type Order = {
+export type Order = {
   id: string;
   ref_num: number;
   status: string;
@@ -16,12 +17,18 @@ type Order = {
   postal_code: string;
   notes: string;
   delivery_day: string;
+  cook_date: string;
   total: number;
   created_at: string;
   order_items: OrderItem[];
 };
 
-const STATUS_FILTERS = ["paid", "pending_payment", "cancelled", "all"] as const;
+type View = { mode: "cycle"; cook: string } | { mode: "range"; from: string; to: string } | { mode: "all" };
+
+const STATUS_FILTERS = ["paid", "pending_payment", "cancelled", "refunded", "all"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+const STATUS_LABEL: Record<string, string> = { pending_payment: "pending" };
 
 const badgeColors: Record<string, { bg: string; fg: string }> = {
   paid: { bg: "#2e6b3e", fg: "#fdf6e8" },
@@ -30,139 +37,334 @@ const badgeColors: Record<string, { bg: string; fg: string }> = {
   refunded: { bg: "#c8492a", fg: "#fdf6e8" },
 };
 
+const muted: React.CSSProperties = { color: "#a1806f", fontSize: 12.5 };
+const h2: React.CSSProperties = { fontWeight: 600, fontSize: 15, margin: "0 0 8px", color: "#c8492a" };
+
+function meals(o: Order): number {
+  return o.order_items.reduce((n, i) => n + i.qty * i.pack_size, 0);
+}
+
+/** Last delivery date of a cycle, given the configured delivery weekdays. */
+function lastDeliveryOf(cook: string, settings: Settings): string {
+  return settings.delivery_days.map((d) => deliveryDate(cook, d)).sort().at(-1) ?? cook;
+}
+
+/** The close (cut-off) date of the ordering window that feeds this cook date. */
+function closeDateOf(cook: string, settings: Settings): string {
+  const closeIdx = DAY_ORDER.indexOf(settings.close_day);
+  return addDays(cook, -((weekdayIdx(cook) - closeIdx + 7) % 7));
+}
+
 export default function OrdersTab() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_FILTERS)[number]>("paid");
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("paid");
   const [dayFilter, setDayFilter] = useState<string>("all");
-  const [status, setStatus] = useState<string | null>(null);
+  const [view, setView] = useState<View | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
       .from("orders")
       .select("*, order_items(*)")
       .order("created_at", { ascending: false })
-      .limit(200)
+      .limit(300)
       .then(({ data, error }) => {
-        if (error) return setStatus(`Error loading — try refreshing or log in again (${error.message})`);
+        if (error) return setError(`Error loading — try refreshing or log in again (${error.message})`);
         setOrders((data ?? []) as Order[]);
       });
+    supabase.from("settings").select("*").eq("id", 1).single().then(({ data, error }) => {
+      if (error) return setError(`Error loading — try refreshing or log in again (${error.message})`);
+      setSettings(data as Settings);
+    });
   }, []);
 
-  const filtered = orders.filter(
-    (o) =>
-      (statusFilter === "all" || o.status === statusFilter) &&
-      (dayFilter === "all" || o.delivery_day === dayFilter)
+  const today = amsToday();
+
+  // Every cook date we know about (from orders) plus the one the current
+  // ordering window feeds, so an empty upcoming cycle still shows up.
+  const cycles = useMemo(() => {
+    const set = new Set(orders.map((o) => o.cook_date));
+    if (settings) set.add(cookDateFor(settings));
+    return [...set].sort().reverse();
+  }, [orders, settings]);
+
+  // "This cycle" = the earliest cycle whose deliveries aren't done yet.
+  const activeCycle = useMemo(() => {
+    if (!settings) return null;
+    const open = cycles.filter((c) => lastDeliveryOf(c, settings) >= today).sort();
+    return open[0] ?? cycles[0] ?? null;
+  }, [cycles, settings, today]);
+
+  const effectiveView: View = view ?? (activeCycle ? { mode: "cycle", cook: activeCycle } : { mode: "all" });
+
+  const inView = (o: Order) => {
+    const v = effectiveView;
+    if (v.mode === "cycle") return o.cook_date === v.cook;
+    if (v.mode === "range") return (!v.from || o.cook_date >= v.from) && (!v.to || o.cook_date <= v.to);
+    return true;
+  };
+
+  const viewOrders = orders.filter(inView);
+  const paidInView = viewOrders.filter((o) => o.status === "paid");
+
+  // Delivery dates present in this view (any status), for the day chips.
+  const deliveryDates = useMemo(
+    () => [...new Set(viewOrders.map((o) => deliveryDate(o.cook_date, o.delivery_day)))].sort(),
+    [viewOrders]
   );
 
-  const deliveryDays = [...new Set(orders.map((o) => o.delivery_day))];
+  const filtered = viewOrders.filter(
+    (o) =>
+      (statusFilter === "all" || o.status === statusFilter) &&
+      (dayFilter === "all" || deliveryDate(o.cook_date, o.delivery_day) === dayFilter)
+  );
 
-  // what to cook: total meals per dish across PAID orders (respecting day filter)
+  // What to cook: meals per dish across PAID orders in view (respecting day filter).
   const cookSummary = useMemo(() => {
-    const meals: Record<string, number> = {};
-    orders
-      .filter((o) => o.status === "paid" && (dayFilter === "all" || o.delivery_day === dayFilter))
+    const byDish: Record<string, number> = {};
+    paidInView
+      .filter((o) => dayFilter === "all" || deliveryDate(o.cook_date, o.delivery_day) === dayFilter)
       .flatMap((o) => o.order_items)
       .forEach((i) => {
-        meals[i.dish_name] = (meals[i.dish_name] ?? 0) + i.qty * i.pack_size;
+        byDish[i.dish_name] = (byDish[i.dish_name] ?? 0) + i.qty * i.pack_size;
       });
-    return Object.entries(meals).sort((a, b) => b[1] - a[1]);
-  }, [orders, dayFilter]);
+    return Object.entries(byDish).sort((a, b) => b[1] - a[1]);
+  }, [paidInView, dayFilter]);
 
-  const chip = adminChip;
+  // Deliveries per date across PAID orders in view.
+  const deliverySummary = useMemo(() => {
+    const byDate: Record<string, { orders: number; meals: number }> = {};
+    paidInView.forEach((o) => {
+      const d = deliveryDate(o.cook_date, o.delivery_day);
+      byDate[d] = byDate[d] ?? { orders: 0, meals: 0 };
+      byDate[d].orders += 1;
+      byDate[d].meals += meals(o);
+    });
+    return Object.entries(byDate).sort();
+  }, [paidInView]);
+
+  const totalMeals = paidInView.reduce((n, o) => n + meals(o), 0);
+  const revenue = paidInView.reduce((n, o) => n + o.total, 0);
+
+  function pickView(v: View) {
+    setView(v);
+    setDayFilter("all");
+  }
+
+  function cycleStatus(cook: string): { text: string; color: string } {
+    if (!settings) return { text: "", color: "#a1806f" };
+    if (cookDateFor(settings) === cook && isWindowOpen(settings)) {
+      return {
+        text: `Orders open until ${fmtDate(closeDateOf(cook, settings))} ${String(settings.cutoff_time).slice(0, 5)}`,
+        color: "#2e6b3e",
+      };
+    }
+    if (lastDeliveryOf(cook, settings) >= today) return { text: "Orders closed · list is final", color: "#c8492a" };
+    return { text: "Delivered", color: "#a1806f" };
+  }
+
+  const viewTitle = (() => {
+    const v = effectiveView;
+    if (v.mode === "cycle") return `Cook ${fmtDate(v.cook)}`;
+    if (v.mode === "range") return `Cook dates ${v.from ? fmtDate(v.from) : "…"} – ${v.to ? fmtDate(v.to) : "…"}`;
+    return "All orders";
+  })();
 
   return (
     <div>
-      <h1 style={{ fontWeight: 700, fontSize: "clamp(24px, 4vw, 34px)", letterSpacing: "-0.03em", margin: "0 0 16px", color: "#5e1d22" }}>
+      <h1 style={{ fontWeight: 700, fontSize: "clamp(24px, 4vw, 34px)", letterSpacing: "-0.03em", margin: "0 0 4px", color: "#5e1d22" }}>
         Orders
       </h1>
+      <p style={{ ...muted, margin: "0 0 14px", lineHeight: 1.5 }}>
+        Grouped by <strong>cooking day</strong>: one cycle = the orders that close together, get cooked on the same
+        {settings ? ` ${settings.cook_day}` : " day"}, and go out on the delivery days after it.
+      </p>
 
-      {status && (
-        <p style={{ fontSize: 13.5, fontWeight: 600, color: "#c8492a", margin: "0 0 14px" }}>{status}</p>
-      )}
+      {error && <p style={{ fontSize: 13.5, fontWeight: 600, color: "#c8492a", margin: "0 0 14px" }}>{error}</p>}
 
-      {cookSummary.length > 0 && (
-        <div style={{ ...adminCard, marginBottom: 18 }}>
-          <h2 style={{ fontWeight: 600, fontSize: 15, margin: "0 0 8px", color: "#c8492a" }}>
-            To cook (paid orders{dayFilter !== "all" ? `, ${dayFilter}` : ""})
-          </h2>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
-            {cookSummary.map(([dish, meals]) => (
-              <span key={dish} style={{ fontSize: 14, color: "#5e1d22" }}>
-                <strong>{meals}</strong> meals · {dish}
-              </span>
-            ))}
-          </div>
+      {/* Cycle picker */}
+      <div className="sd-chip-row" style={{ marginBottom: 8 }}>
+        {cycles.map((c) => {
+          const active = effectiveView.mode === "cycle" && effectiveView.cook === c;
+          const isCurrent = c === activeCycle;
+          return (
+            <button key={c} type="button" onClick={() => pickView({ mode: "cycle", cook: c })} style={chipStyle(active)}>
+              {isCurrent ? "This cycle · " : ""}
+              {fmtDate(c)}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => pickView({ mode: "range", from: addDays(today, -28), to: today })}
+          style={chipStyle(effectiveView.mode === "range")}
+        >
+          Date range
+        </button>
+        <button type="button" onClick={() => pickView({ mode: "all" })} style={chipStyle(effectiveView.mode === "all")}>
+          All
+        </button>
+      </div>
+
+      {effectiveView.mode === "range" && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 8, maxWidth: 420 }}>
+          <label style={{ flex: 1 }}>
+            <span style={adminLabel}>Cook date from</span>
+            <input
+              type="date"
+              value={effectiveView.from}
+              onChange={(e) => setView({ mode: "range", from: e.target.value, to: effectiveView.to })}
+              style={adminInput}
+            />
+          </label>
+          <label style={{ flex: 1 }}>
+            <span style={adminLabel}>to</span>
+            <input
+              type="date"
+              value={effectiveView.to}
+              onChange={(e) => setView({ mode: "range", from: effectiveView.from, to: e.target.value })}
+              style={adminInput}
+            />
+          </label>
         </div>
       )}
 
-      <div className="sd-chip-row" style={{ marginBottom: 10 }}>
+      {/* Cycle summary: what to cook, what to deliver */}
+      <div style={{ ...adminCard, marginBottom: 14 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 12px", marginBottom: 10 }}>
+          <span style={{ fontWeight: 700, fontSize: 18, color: "#5e1d22" }}>{viewTitle}</span>
+          {effectiveView.mode === "cycle" && (
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: cycleStatus(effectiveView.cook).color }}>
+              {cycleStatus(effectiveView.cook).text}
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 22px", fontSize: 14, color: "#5e1d22", marginBottom: 12 }}>
+          <span><strong>{paidInView.length}</strong> paid orders</span>
+          <span><strong>{totalMeals}</strong> meals</span>
+          <span><strong>{eur(revenue)}</strong> paid</span>
+        </div>
+
+        {cookSummary.length > 0 && (
+          <>
+            <h2 style={h2}>To cook{dayFilter !== "all" ? ` · ${fmtDate(dayFilter)} only` : ""}</h2>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginBottom: 12 }}>
+              {cookSummary.map(([dish, n]) => (
+                <span key={dish} style={{ fontSize: 14, color: "#5e1d22" }}>
+                  <strong>{n}</strong> meals · {dish}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {deliverySummary.length > 0 && (
+          <>
+            <h2 style={h2}>To deliver</h2>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
+              {deliverySummary.map(([d, s]) => (
+                <span key={d} style={{ fontSize: 14, color: "#5e1d22" }}>
+                  <strong>{fmtDate(d)}</strong> · {s.orders} orders · {s.meals} meals
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {paidInView.length === 0 && <span style={muted}>No paid orders here yet.</span>}
+      </div>
+
+      {/* Status filter */}
+      <div className="sd-chip-row" style={{ marginBottom: 8 }}>
         {STATUS_FILTERS.map((f) => (
-          <button key={f} type="button" onClick={() => setStatusFilter(f)} style={chip(statusFilter === f)}>
-            {f === "pending_payment" ? "pending" : f}
-          </button>
-        ))}
-        <span style={{ width: 12 }} />
-        <button type="button" onClick={() => setDayFilter("all")} style={chip(dayFilter === "all")}>
-          all days
-        </button>
-        {deliveryDays.map((d) => (
-          <button key={d} type="button" onClick={() => setDayFilter(d)} style={chip(dayFilter === d)}>
-            {d}
+          <button key={f} type="button" onClick={() => setStatusFilter(f)} style={chipStyle(statusFilter === f)}>
+            {STATUS_LABEL[f] ?? f}
           </button>
         ))}
       </div>
 
+      {/* Delivery day filter (only meaningful inside one cycle) */}
+      {effectiveView.mode === "cycle" && deliveryDates.length > 0 && (
+        <div className="sd-chip-row" style={{ marginBottom: 12 }}>
+          <button type="button" onClick={() => setDayFilter("all")} style={chipStyle(dayFilter === "all")}>
+            all delivery days
+          </button>
+          {deliveryDates.map((d) => (
+            <button key={d} type="button" onClick={() => setDayFilter(d)} style={chipStyle(dayFilter === d)}>
+              {fmtDate(d)}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {filtered.length === 0 && (
-          <p style={{ color: "#a1806f", fontSize: 14 }}>No orders match this filter.</p>
+        {filtered.length === 0 && <p style={{ ...muted, fontSize: 14 }}>No orders match this filter.</p>}
+        {filtered.map((o) => (
+          <OrderCard key={o.id} order={o} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const chipStyle = adminChip;
+
+function OrderCard({ order: o }: { order: Order }) {
+  const badge = badgeColors[o.status] ?? badgeColors.cancelled;
+  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${o.address}, ${o.postal_code} Amsterdam`)}`;
+  return (
+    <div style={{ ...adminCard, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontWeight: 700, fontSize: 16, color: "#5e1d22" }}>#SD-{o.ref_num}</span>
+        <span
+          style={{
+            fontSize: 10.5,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            background: badge.bg,
+            color: badge.fg,
+            borderRadius: 999,
+            padding: "3px 9px",
+          }}
+        >
+          {STATUS_LABEL[o.status] ?? o.status}
+        </span>
+        <span style={{ marginLeft: "auto", fontWeight: 700, fontSize: 17, color: "#5e1d22" }}>{eur(o.total)}</span>
+      </div>
+
+      <div style={{ fontSize: 14, lineHeight: 1.6, color: "#5e1d22", overflowWrap: "anywhere" }}>
+        <strong>{o.name}</strong>
+        {o.phone && (
+          <>
+            {" · "}
+            <a href={`tel:${o.phone.replace(/\s/g, "")}`} style={{ color: "#c8492a" }}>{o.phone}</a>
+          </>
         )}
-        {filtered.map((o) => {
-          const badge = badgeColors[o.status] ?? badgeColors.cancelled;
-          return (
-            <div key={o.id} style={{ ...adminCard, display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-start" }}>
-              <div style={{ flex: "0 0 auto", minWidth: 92 }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: "#5e1d22" }}>#SD-{o.ref_num}</div>
-                <span
-                  style={{
-                    display: "inline-block",
-                    marginTop: 6,
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    background: badge.bg,
-                    color: badge.fg,
-                    borderRadius: 999,
-                    padding: "3px 9px",
-                  }}
-                >
-                  {o.status === "pending_payment" ? "pending" : o.status}
-                </span>
-              </div>
-              <div style={{ flex: "1 1 220px", minWidth: 0, fontSize: 13.5, lineHeight: 1.6, color: "#5e1d22" }}>
-                <strong>{o.name}</strong> · <a href={`mailto:${o.email}`} style={{ color: "#c8492a" }}>{o.email}</a>
-                {o.phone && <> · {o.phone}</>}
-                <br />
-                {o.address}, {o.postal_code}
-                <br />
-                {o.order_items.map((i) => `${i.qty}× ${i.pack_size}-meal · ${i.dish_name}`).join(", ")}
-                {o.notes && (
-                  <>
-                    <br />
-                    <em style={{ color: "#a1806f" }}>“{o.notes}”</em>
-                  </>
-                )}
-              </div>
-              <div style={{ flex: "0 0 auto", textAlign: "right", fontSize: 13.5, color: "#5e1d22" }}>
-                <div style={{ fontWeight: 700, fontSize: 17 }}>{eur(o.total)}</div>
-                <div>{o.delivery_day}</div>
-                <div style={{ color: "#a1806f", fontSize: 12 }}>
-                  {new Date(o.created_at).toLocaleDateString("en-NL", { day: "numeric", month: "short" })}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+        {" · "}
+        <a href={`mailto:${o.email}`} style={{ color: "#c8492a" }}>{o.email}</a>
+        <br />
+        <a href={mapsHref} target="_blank" rel="noreferrer" style={{ color: "#5e1d22", textDecoration: "underline dotted" }}>
+          {o.address}, {o.postal_code}
+        </a>
+        <br />
+        {o.order_items.map((i) => `${i.qty}× ${i.pack_size}-meal · ${i.dish_name}`).join(", ")}
+        {o.notes && (
+          <>
+            <br />
+            <em style={{ color: "#a1806f" }}>“{o.notes}”</em>
+          </>
+        )}
+      </div>
+
+      <div style={{ ...muted, display: "flex", flexWrap: "wrap", gap: "2px 14px" }}>
+        <span>
+          Deliver <strong style={{ color: "#5e1d22" }}>{fmtDate(deliveryDate(o.cook_date, o.delivery_day))}</strong>
+        </span>
+        <span>Cook {fmtDate(o.cook_date)}</span>
+        <span>Ordered {new Date(o.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
       </div>
     </div>
   );

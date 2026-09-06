@@ -55,3 +55,41 @@ def test_cutoff_with_seconds_format():
     # Postgres time comes back as "22:00:00"
     assert window_is_open(s(cutoff_time="22:00:00"),
                           datetime(2026, 9, 6, 21, 30, tzinfo=AMS)) is True
+
+
+# --- cook_date_for -----------------------------------------------------------
+# Seed rhythm: orders Wed → Sun 22:00, cook Monday.
+
+from datetime import date
+from api._lib.window import cook_date_for
+
+
+def cs(**over):
+    return s(cook_day="Monday", **over)
+
+
+def test_cook_date_midweek_order():
+    # Thursday 3 Sep → closes Sun 6 Sep → cooked Mon 7 Sep
+    assert cook_date_for(cs(), datetime(2026, 9, 3, 15, 0, tzinfo=AMS)) == date(2026, 9, 7)
+
+
+def test_cook_date_sunday_before_cutoff():
+    assert cook_date_for(cs(), datetime(2026, 9, 6, 21, 59, tzinfo=AMS)) == date(2026, 9, 7)
+
+
+def test_cook_date_sunday_after_cutoff_rolls_a_week():
+    # Only reachable with window_override=open; ingredients for Mon 7 are bought.
+    assert cook_date_for(cs(), datetime(2026, 9, 6, 22, 0, tzinfo=AMS)) == date(2026, 9, 14)
+
+
+def test_cook_date_on_cook_day_itself_rolls_a_week():
+    # Monday 7 Sep 10:00 (force-open) → next close Sun 13 → cook Mon 14
+    assert cook_date_for(cs(), datetime(2026, 9, 7, 10, 0, tzinfo=AMS)) == date(2026, 9, 14)
+
+
+def test_cook_date_same_day_close_and_cook():
+    # Close Monday 09:00, cook Monday afternoon: order Sunday → cooked next day.
+    st = cs(close_day="Monday", cutoff_time="09:00")
+    assert cook_date_for(st, datetime(2026, 9, 6, 12, 0, tzinfo=AMS)) == date(2026, 9, 7)
+    # Order Monday 09:30, after cutoff → next Monday.
+    assert cook_date_for(st, datetime(2026, 9, 7, 9, 30, tzinfo=AMS)) == date(2026, 9, 14)

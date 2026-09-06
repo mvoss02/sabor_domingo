@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr, Field
 from api._lib.config import env
 from api._lib.db import get_client
 from api._lib.pricing import CartError, price_order
-from api._lib.window import window_is_open
+from api._lib.window import cook_date_for, window_is_open
 
 AMS = ZoneInfo("Europe/Amsterdam")
 
@@ -48,7 +48,8 @@ def create_checkout(payload: CheckoutPayload) -> str:
     settings = client.table("settings").select("*").eq("id", 1).execute().data[0]
     dishes = client.table("dishes").select("*").execute().data
 
-    if not window_is_open(settings, _now()):
+    now = _now()
+    if not window_is_open(settings, now):
         raise WindowClosed()
     if payload.delivery_day not in settings["delivery_days"]:
         raise CartError("Invalid delivery day.")
@@ -60,6 +61,9 @@ def create_checkout(payload: CheckoutPayload) -> str:
         "name": payload.name, "email": payload.email, "address": payload.address,
         "postal_code": payload.postal_normalized, "phone": payload.phone,
         "notes": payload.notes, "delivery_day": payload.delivery_day,
+        # Frozen at order time so the admin's per-cycle view stays correct even
+        # if the weekly schedule is changed later.
+        "cook_date": cook_date_for(settings, now).isoformat(),
         "subtotal": totals.subtotal_cents / 100, "fee": totals.fee_cents / 100,
         "total": totals.total_cents / 100,
     }).execute().data[0]

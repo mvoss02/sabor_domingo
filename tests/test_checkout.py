@@ -13,6 +13,7 @@ CLOSED_NOW = datetime(2026, 8, 31, 12, 0, tzinfo=AMS)   # Monday
 
 SETTINGS_ROW = {"price_4": 39, "price_10": 85, "order_fee": 4, "max_packs": 5,
                 "open_day": "Wednesday", "close_day": "Sunday", "cutoff_time": "22:00",
+                "cook_day": "Monday",
                 "window_override": "auto", "delivery_days": ["Monday", "Tuesday", "Wednesday"]}
 DISH_ROWS = [{"id": "d1", "name": "Cochinita", "available": True}]
 
@@ -108,6 +109,8 @@ def test_happy_path_returns_stripe_url(monkeypatch):
     # unverified DB column default.
     insert_payload = db.table("orders").insert.call_args.args[0]
     assert insert_payload["status"] == "pending_payment"
+    # Thursday 3 Sep order → cooked Monday 7 Sep
+    assert insert_payload["cook_date"] == "2026-09-07"
 
 
 def test_window_closed_409(monkeypatch):
