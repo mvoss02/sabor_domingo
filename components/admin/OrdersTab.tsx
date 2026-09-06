@@ -2,26 +2,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { adminCard, adminChip, adminInput, adminLabel } from "@/components/admin/ui";
+import OrderCard from "@/components/admin/OrderCard";
 import { DAY_ORDER, addDays, amsToday, cookDateFor, deliveryDate, eur, fmtDate, isWindowOpen, weekdayIdx } from "@/lib/window";
-import type { Settings } from "@/lib/types";
-
-type OrderItem = { pack_size: number; dish_name: string; qty: number; unit_price: number };
-export type Order = {
-  id: string;
-  ref_num: number;
-  status: string;
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  postal_code: string;
-  notes: string;
-  delivery_day: string;
-  cook_date: string;
-  total: number;
-  created_at: string;
-  order_items: OrderItem[];
-};
+import type { Order, Settings } from "@/lib/types";
 
 type View = { mode: "cycle"; cook: string } | { mode: "range"; from: string; to: string } | { mode: "all" };
 
@@ -29,13 +12,6 @@ const STATUS_FILTERS = ["paid", "pending_payment", "cancelled", "refunded", "all
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 const STATUS_LABEL: Record<string, string> = { pending_payment: "pending" };
-
-const badgeColors: Record<string, { bg: string; fg: string }> = {
-  paid: { bg: "#2e6b3e", fg: "#fdf6e8" },
-  pending_payment: { bg: "#f2a63b", fg: "#4a1519" },
-  cancelled: { bg: "#ece0cb", fg: "#a1806f" },
-  refunded: { bg: "#c8492a", fg: "#fdf6e8" },
-};
 
 const muted: React.CSSProperties = { color: "#a1806f", fontSize: 12.5 };
 const h2: React.CSSProperties = { fontWeight: 600, fontSize: 15, margin: "0 0 8px", color: "#c8492a" };
@@ -169,7 +145,12 @@ export default function OrdersTab() {
   }, [paidInView]);
 
   const totalMeals = paidInView.reduce((n, o) => n + meals(o), 0);
-  const revenue = paidInView.reduce((n, o) => n + o.total, 0);
+  // Net of partial refunds: what the kitchen actually keeps for this view.
+  const revenue = paidInView.reduce((n, o) => n + Number(o.total) - Number(o.refunded_total ?? 0), 0);
+
+  function replaceOrder(u: Order) {
+    setRawOrders((prev) => prev.map((x) => (x.id === u.id ? u : x)));
+  }
 
   function pickView(v: View) {
     setView(v);
@@ -326,7 +307,7 @@ export default function OrdersTab() {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {filtered.length === 0 && <p style={{ ...muted, fontSize: 14 }}>No orders match this filter.</p>}
         {filtered.map((o) => (
-          <OrderCard key={o.id} order={o} />
+          <OrderCard key={o.id} order={o} settings={settings} onChange={replaceOrder} />
         ))}
       </div>
     </div>
@@ -334,62 +315,3 @@ export default function OrdersTab() {
 }
 
 const chipStyle = adminChip;
-
-function OrderCard({ order: o }: { order: Order }) {
-  const badge = badgeColors[o.status] ?? badgeColors.cancelled;
-  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${o.address}, ${o.postal_code} Amsterdam`)}`;
-  return (
-    <div style={{ ...adminCard, display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontWeight: 700, fontSize: 16, color: "#5e1d22" }}>#SD-{o.ref_num}</span>
-        <span
-          style={{
-            fontSize: 10.5,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            background: badge.bg,
-            color: badge.fg,
-            borderRadius: 999,
-            padding: "3px 9px",
-          }}
-        >
-          {STATUS_LABEL[o.status] ?? o.status}
-        </span>
-        <span style={{ marginLeft: "auto", fontWeight: 700, fontSize: 17, color: "#5e1d22" }}>{eur(o.total)}</span>
-      </div>
-
-      <div style={{ fontSize: 14, lineHeight: 1.6, color: "#5e1d22", overflowWrap: "anywhere" }}>
-        <strong>{o.name}</strong>
-        {o.phone && (
-          <>
-            {" · "}
-            <a href={`tel:${o.phone.replace(/\s/g, "")}`} style={{ color: "#c8492a" }}>{o.phone}</a>
-          </>
-        )}
-        {" · "}
-        <a href={`mailto:${o.email}`} style={{ color: "#c8492a" }}>{o.email}</a>
-        <br />
-        <a href={mapsHref} target="_blank" rel="noreferrer" style={{ color: "#5e1d22", textDecoration: "underline dotted" }}>
-          {o.address}, {o.postal_code}
-        </a>
-        <br />
-        {o.order_items.map((i) => `${i.qty}× ${i.pack_size}-meal · ${i.dish_name}`).join(", ")}
-        {o.notes && (
-          <>
-            <br />
-            <em style={{ color: "#a1806f" }}>“{o.notes}”</em>
-          </>
-        )}
-      </div>
-
-      <div style={{ ...muted, display: "flex", flexWrap: "wrap", gap: "2px 14px" }}>
-        <span>
-          Deliver <strong style={{ color: "#5e1d22" }}>{fmtDate(deliveryDate(o.cook_date, o.delivery_day))}</strong>
-        </span>
-        <span>Cook {fmtDate(o.cook_date)}</span>
-        <span>Ordered {new Date(o.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
-      </div>
-    </div>
-  );
-}

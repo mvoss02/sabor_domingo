@@ -24,6 +24,35 @@ export interface Settings {
   closed_message: string;
 }
 
+export interface OrderItem {
+  id: string;
+  pack_size: number;
+  dish_name: string;
+  qty: number;
+  unit_price: number;
+}
+
+export interface Order {
+  id: string;
+  ref_num: number;
+  status: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  postal_code: string;
+  notes: string;
+  delivery_day: string;
+  cook_date: string;
+  subtotal: number;
+  fee: number;
+  total: number;
+  refunded_total: number;
+  stripe_payment_intent: string | null;
+  created_at: string;
+  order_items: OrderItem[];
+}
+
 export interface HeroContent {
   title: string;
   subtitle: string;
