@@ -220,10 +220,15 @@ function EditPanel({
     ? settings.delivery_days
     : [...(settings?.delivery_days ?? []), o.delivery_day];
 
-  const itemsTotal = round2(items.reduce((n, i) => n + i.qty * Number(i.unit_price), 0) + Number(o.fee));
+  const [refundFee, setRefundFee] = useState(false);
+
+  const fee = Number(o.fee);
+  const packsValue = round2(items.reduce((n, i) => n + i.qty * Number(i.unit_price), 0));
+  const itemsTotal = round2(packsValue + fee);
+  const packsReduced = items.some((i) => i.qty < (o.order_items.find((x) => x.id === i.id)?.qty ?? 0));
   const alreadyRefunded = Number(o.refunded_total ?? 0);
   // What the customer should end up having paid vs what they actually did.
-  const diff = round2(Number(o.total) - alreadyRefunded - itemsTotal);
+  const diff = round2(Number(o.total) - alreadyRefunded - itemsTotal + (refundFee ? fee : 0));
 
   function setQty(id: string, qty: number) {
     setItems((xs) => xs.map((i) => (i.id === id ? { ...i, qty: Math.max(0, qty) } : i)));
@@ -259,8 +264,10 @@ function EditPanel({
     onSaved(updated, diff);
   }
 
+  // flex-basis only makes sense inside the row containers; on the notes
+  // field, which sits directly in the column, it would become 200px of height.
   const field = (key: keyof typeof draft, label: string, textarea = false) => (
-    <label style={{ display: "block", flex: "1 1 200px", minWidth: 0 }}>
+    <label style={{ display: "block", flex: textarea ? undefined : "1 1 200px", minWidth: 0 }}>
       <span style={adminLabel}>{label}</span>
       {textarea ? (
         <textarea rows={2} value={draft[key]} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} style={{ ...adminInput, resize: "vertical" }} />
@@ -315,8 +322,15 @@ function EditPanel({
         </div>
       </div>
 
+      {packsReduced && fee > 0 && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "#5e1d22", cursor: "pointer" }}>
+          <input type="checkbox" checked={refundFee} onChange={(e) => setRefundFee(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#c8492a" }} />
+          Also refund the {eur(fee)} order fee
+        </label>
+      )}
+
       <div style={{ fontSize: 13.5, color: "#5e1d22" }}>
-        New order value <strong>{eur(itemsTotal)}</strong> (incl. {eur(Number(o.fee))} fee) · paid {eur(Number(o.total))}
+        New order value <strong>{eur(itemsTotal)}</strong> (incl. {eur(fee)} fee) · paid {eur(Number(o.total))}
         {alreadyRefunded > 0 && <> · already refunded {eur(alreadyRefunded)}</>}
         {diff > 0 && (
           <span style={{ color: "#c8492a", fontWeight: 600 }}> · {eur(diff)} to refund after saving</span>
@@ -370,6 +384,7 @@ function RefundPanel({
 }) {
   // How many of each pack line to refund (and remove).
   const [picks, setPicks] = useState<Record<string, number>>({});
+  const [includeFee, setIncludeFee] = useState(false);
   const [amount, setAmount] = useState<string>(String(prefill ?? remaining));
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -381,14 +396,26 @@ function RefundPanel({
   const allPicked = totalPacks > 0 && pickedPacks === totalPacks;
   const picksValue = round2(o.order_items.reduce((n, i) => n + (picks[i.id] ?? 0) * Number(i.unit_price), 0));
 
+  const fee = Number(o.fee);
+
+  function recompute(next: Record<string, number>, withFee: boolean) {
+    const packs = o.order_items.reduce((n, i) => n + (next[i.id] ?? 0), 0);
+    const value = round2(o.order_items.reduce((n, i) => n + (next[i.id] ?? 0) * Number(i.unit_price), 0));
+    // Everything picked = cancel the whole order, fee always included.
+    const all = packs === totalPacks && totalPacks > 0;
+    setAmount(String(all ? remaining : Math.min(round2(value + (withFee ? fee : 0)), remaining)));
+    setConfirming(false);
+  }
+
   function pick(id: string, max: number, qty: number) {
     const next = { ...picks, [id]: Math.min(max, Math.max(0, qty)) };
     setPicks(next);
-    const packs = o.order_items.reduce((n, i) => n + (next[i.id] ?? 0), 0);
-    const value = round2(o.order_items.reduce((n, i) => n + (next[i.id] ?? 0) * Number(i.unit_price), 0));
-    // Everything picked = cancel the whole order, fee included.
-    setAmount(String(packs === totalPacks && totalPacks > 0 ? remaining : Math.min(value, remaining)));
-    setConfirming(false);
+    recompute(next, includeFee);
+  }
+
+  function toggleFee(on: boolean) {
+    setIncludeFee(on);
+    recompute(picks, on);
   }
 
   const amt = round2(Number(amount));
@@ -484,11 +511,20 @@ function RefundPanel({
             );
           })}
         </div>
-        {pickedPacks > 0 && (
+        {pickedPacks > 0 && allPicked && (
           <div style={{ fontSize: 13, color: "#a1806f", marginTop: 6 }}>
-            {allPicked
-              ? `All packs picked: full refund of ${eur(remaining)}, order fee included.`
-              : `Packs worth ${eur(picksValue)}; the ${eur(Number(o.fee))} order fee stays.`}
+            All packs picked: full refund of {eur(remaining)}, order fee included.
+          </div>
+        )}
+        {pickedPacks > 0 && !allPicked && (
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 14px", fontSize: 13, color: "#a1806f", marginTop: 8 }}>
+            <span>Packs worth {eur(picksValue)}.</span>
+            {fee > 0 && (
+              <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#5e1d22", cursor: "pointer" }}>
+                <input type="checkbox" checked={includeFee} onChange={(e) => toggleFee(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#c8492a" }} />
+                Also refund the {eur(fee)} order fee
+              </label>
+            )}
           </div>
         )}
       </div>
@@ -534,6 +570,7 @@ function RefundPanel({
               style={outlineButton}
               onClick={() => {
                 setPicks(Object.fromEntries(o.order_items.map((i) => [i.id, i.qty])));
+                setIncludeFee(true);
                 setAmount(String(remaining));
                 setConfirming(false);
               }}
