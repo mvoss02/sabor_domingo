@@ -35,20 +35,29 @@ export function amsToday(now = new Date()): string {
   return amsParts(now).iso;
 }
 
-export function addDays(iso: string, n: number): string {
+function utcMidnight(iso: string): Date | null {
   const d = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function addDays(iso: string, n: number): string {
+  const d = utcMidnight(iso);
+  if (!d) return iso;
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 
 /** 0 = Monday … 6 = Sunday, matching DAY_ORDER and Python's weekday(). */
 export function weekdayIdx(iso: string): number {
-  return (new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const d = utcMidnight(iso);
+  return d ? (d.getUTCDay() + 6) % 7 : 0;
 }
 
 /** "Mon 7 Sep" */
 export function fmtDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+  const d = utcMidnight(iso);
+  if (!d) return "?";
+  return d.toLocaleDateString("en-GB", {
     weekday: "short",
     day: "numeric",
     month: "short",

@@ -56,7 +56,7 @@ function closeDateOf(cook: string, settings: Settings): string {
 }
 
 export default function OrdersTab() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [rawOrders, setRawOrders] = useState<Order[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("paid");
   const [dayFilter, setDayFilter] = useState<string>("all");
@@ -71,13 +71,24 @@ export default function OrdersTab() {
       .limit(300)
       .then(({ data, error }) => {
         if (error) return setError(`Error loading — try refreshing or log in again (${error.message})`);
-        setOrders((data ?? []) as Order[]);
+        setRawOrders((data ?? []) as Order[]);
       });
     supabase.from("settings").select("*").eq("id", 1).single().then(({ data, error }) => {
       if (error) return setError(`Error loading — try refreshing or log in again (${error.message})`);
       setSettings(data as Settings);
     });
   }, []);
+
+  // Rows from before migration 0008 (or a DB where it hasn't run yet) have
+  // no cook_date; derive it from created_at with the same rule so the tab
+  // still works instead of crashing on an undefined date.
+  const orders = useMemo(
+    () =>
+      settings
+        ? rawOrders.map((o) => (o.cook_date ? o : { ...o, cook_date: cookDateFor(settings, new Date(o.created_at)) }))
+        : [],
+    [rawOrders, settings]
+  );
 
   const today = amsToday();
 
