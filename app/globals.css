@@ -163,8 +163,8 @@ textarea {
   }
   .sd-nav-links.open .sd-nav-link { padding: 12px 2px; font-size: 15px; }
   .sd-nav-burger { display: block; }
-  .sd-ticker { padding: 6px 0 !important; }
-  .sd-ticker-inner { font-size: 10.5px !important; letter-spacing: 0.1em !important; }
+  .sd-ticker { padding: 4px 0 !important; }
+  .sd-ticker-inner { font-size: 10px !important; letter-spacing: 0.1em !important; }
 }
 
 /* Dish quantity stepper: center the count, slim down on mobile */

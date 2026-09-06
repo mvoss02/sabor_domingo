@@ -83,13 +83,14 @@ export default function Nav() {
         </div>
       </header>
 
-      <div className="sd-ticker" style={{ background: "#c8492a", color: "#fdf6e8", overflow: "hidden", whiteSpace: "nowrap", padding: "9px 0" }}>
+      <div className="sd-ticker" style={{ background: "#c8492a", color: "#fdf6e8", overflow: "hidden", whiteSpace: "nowrap", padding: "6px 0" }}>
         <div
           className="sd-ticker-inner"
           style={{
             display: "inline-block",
             animation: "sdrun 100s linear infinite",
-            fontSize: 12,
+            fontSize: 11,
+            lineHeight: 1.3,
             fontWeight: 600,
             letterSpacing: "0.14em",
             textTransform: "uppercase",
