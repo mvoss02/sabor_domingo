@@ -119,11 +119,21 @@ export default function OrdersTab() {
   const viewOrders = orders.filter(inView);
   const paidInView = viewOrders.filter((o) => o.status === "paid");
 
-  // Delivery dates present in this view (any status), for the day chips.
-  const deliveryDates = useMemo(
-    () => [...new Set(viewOrders.map((o) => deliveryDate(o.cook_date, o.delivery_day)))].sort(),
-    [viewOrders]
-  );
+  // Delivery-day chips for the selected cycle: every configured delivery day
+  // of that cycle (even with zero orders so far), plus any date an order
+  // actually has that the schedule no longer lists.
+  const deliveryDates = useMemo(() => {
+    const v = effectiveView;
+    const set = new Set<string>();
+    if (v.mode === "cycle" && settings) settings.delivery_days.forEach((d) => set.add(deliveryDate(v.cook, d)));
+    viewOrders.forEach((o) => set.add(deliveryDate(o.cook_date, o.delivery_day)));
+    return [...set].sort();
+  }, [effectiveView, settings, viewOrders]);
+
+  const ordersOn = (d: string) =>
+    viewOrders.filter(
+      (o) => (statusFilter === "all" || o.status === statusFilter) && deliveryDate(o.cook_date, o.delivery_day) === d
+    ).length;
 
   const filtered = viewOrders.filter(
     (o) =>
@@ -304,7 +314,7 @@ export default function OrdersTab() {
           </button>
           {deliveryDates.map((d) => (
             <button key={d} type="button" onClick={() => setDayFilter(d)} style={chipStyle(dayFilter === d)}>
-              {fmtDate(d)}
+              {fmtDate(d)} · {ordersOn(d)}
             </button>
           ))}
         </div>
