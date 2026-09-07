@@ -3,6 +3,10 @@ import type { Settings } from "@/lib/types";
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const SHORT = { Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", Saturday: "Sat", Sunday: "Sun" };
 
+// "phases": three tiles (order / cook / deliver), coloured like the 01 02 03
+// numbers below. "days": the older seven day tiles. Flip to compare.
+const RHYTHM_VIEW: "phases" | "days" = "phases";
+
 const OPEN_NOTES = [
   "Menu is live. Early orders get first choice.",
   "Plan the week. The 10-meal pack is popular now.",
@@ -81,8 +85,39 @@ function buildWeek(settings: Settings) {
   });
 }
 
+function buildPhases(settings: Settings) {
+  const s = (d: string) => SHORT[d as keyof typeof SHORT] ?? d;
+  const deliveryDays = settings.delivery_days;
+  const firstDelivery = deliveryDays[0] ?? settings.cook_day;
+  const lastDelivery = deliveryDays[deliveryDays.length - 1] ?? settings.cook_day;
+  const cutoff = String(settings.cutoff_time).slice(0, 5);
+  return [
+    {
+      short: `${s(settings.open_day)} → ${s(settings.close_day)}`,
+      title: "Orders open",
+      note: `Pick your packs and sides. The list closes ${settings.close_day} at ${cutoff}.`,
+      bg: "#ece0cb",
+      fg: "#3d1f18",
+    },
+    {
+      short: s(settings.cook_day),
+      title: "Cooking day",
+      note: "Market at dawn, pots on all day. We only cook what was ordered.",
+      bg: "#e8724f",
+      fg: "#fdf6e8",
+    },
+    {
+      short: firstDelivery === lastDelivery ? s(firstDelivery) : `${s(firstDelivery)} → ${s(lastDelivery)}`,
+      title: "Delivery",
+      note: `Evenings, ${settings.delivery_window}. ${settings.delivery_area}.`,
+      bg: "#7fae86",
+      fg: "#1e3a25",
+    },
+  ];
+}
+
 export default function Rhythm({ settings }: { settings: Settings }) {
-  const week = buildWeek(settings);
+  const tiles = RHYTHM_VIEW === "phases" ? buildPhases(settings) : buildWeek(settings);
   const deliveryDays = settings.delivery_days;
   const firstDelivery = deliveryDays[0] ?? settings.cook_day;
   const lastDelivery = deliveryDays[deliveryDays.length - 1] ?? settings.cook_day;
@@ -133,15 +168,15 @@ export default function Rhythm({ settings }: { settings: Settings }) {
         </p>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 42 }}>
-          {week.map((day) => (
+          {tiles.map((day) => (
             <div
               key={day.short}
               style={{
-                flex: "1 1 118px",
+                flex: RHYTHM_VIEW === "phases" ? "1 1 220px" : "1 1 118px",
                 minWidth: 0,
                 borderRadius: 12,
-                padding: "16px 14px",
-                minHeight: 140,
+                padding: RHYTHM_VIEW === "phases" ? "20px 18px" : "16px 14px",
+                minHeight: RHYTHM_VIEW === "phases" ? 120 : 140,
                 display: "flex",
                 flexDirection: "column",
                 background: day.bg,
@@ -161,10 +196,10 @@ export default function Rhythm({ settings }: { settings: Settings }) {
                 {day.short}
               </span>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 15.5, lineHeight: 1.2, marginBottom: 6 }}>
+                <div style={{ fontWeight: 700, fontSize: RHYTHM_VIEW === "phases" ? 19 : 15.5, lineHeight: 1.2, marginBottom: 6 }}>
                   {day.title}
                 </div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.45, opacity: 0.82 }}>{day.note}</div>
+                <div style={{ fontSize: RHYTHM_VIEW === "phases" ? 13.5 : 12.5, lineHeight: 1.5, opacity: 0.85 }}>{day.note}</div>
               </div>
             </div>
           ))}
