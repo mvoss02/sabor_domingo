@@ -24,9 +24,20 @@ export interface Settings {
   closed_message: string;
 }
 
+export interface Extra {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  available: boolean;
+  image_path: string | null;
+  sort_order: number;
+}
+
 export interface OrderItem {
   id: string;
-  pack_size: number;
+  kind: "pack" | "extra";
+  pack_size: number | null;
   dish_name: string;
   qty: number;
   unit_price: number;

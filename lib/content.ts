@@ -1,14 +1,20 @@
 import { supabase } from "@/lib/supabase";
-import type { Dish, FaqEntry, HeroContent, ImageSlots, Settings } from "@/lib/types";
+import type { Dish, Extra, FaqEntry, HeroContent, ImageSlots, Settings } from "@/lib/types";
 
 export async function getSiteData() {
-  const [dishes, settings, content] = await Promise.all([
+  const [dishes, extras, settings, content] = await Promise.all([
     supabase.from("dishes").select("*").order("sort_order"),
+    supabase.from("extras").select("*").order("sort_order"),
     supabase.from("settings").select("*").eq("id", 1).single(),
     supabase.from("site_content").select("*"),
   ]);
   if (dishes.error) {
     throw new Error(`getSiteData: dishes fetch failed: ${dishes.error.message}`);
+  }
+  if (extras.error) {
+    // Sides are optional for the page; don't take the whole site down over
+    // them (e.g. migration 0011 not applied yet). Step 3 just disappears.
+    console.error(`getSiteData: extras fetch failed: ${extras.error.message}`);
   }
   if (settings.error || !settings.data) {
     throw new Error(
@@ -24,6 +30,7 @@ export async function getSiteData() {
   );
   return {
     dishes: (dishes.data ?? []) as Dish[],
+    extras: (extras.data ?? []) as Extra[],
     settings: settings.data as Settings,
     hero: byKey["hero"] as HeroContent,
     faq: (byKey["faq"] ?? []) as FaqEntry[],

@@ -16,6 +16,8 @@ SETTINGS_ROW = {"price_4": 39, "price_10": 85, "order_fee": 4, "max_packs": 5,
                 "cook_day": "Monday",
                 "window_override": "auto", "delivery_days": ["Monday", "Tuesday", "Wednesday"]}
 DISH_ROWS = [{"id": "d1", "name": "Cochinita", "available": True}]
+EXTRA_ROWS = [{"id": "x1", "name": "Salsa roja", "price": 2.5, "available": True},
+              {"id": "x2", "name": "Tortillas · maiz", "price": 0, "available": True}]
 
 VALID_BODY = {"lines": [{"dish_id": "d1", "pack_size": 10, "qty": 1}],
               "name": "Ana", "email": "ana@example.com",
@@ -72,6 +74,8 @@ def fake_db():
             m.execute.return_value = MagicMock(data=[SETTINGS_ROW])
         elif name == "dishes":
             m.execute.return_value = MagicMock(data=DISH_ROWS)
+        elif name == "extras":
+            m.execute.return_value = MagicMock(data=EXTRA_ROWS)
         elif name == "orders":
             m.execute.return_value = MagicMock(data=[{"id": "order-uuid-1", "ref_num": 241}])
         else:
@@ -160,3 +164,31 @@ def test_stripe_failure_marks_order_cancelled(monkeypatch):
     orders_table = db.table("orders")
     assert orders_table.update.call_args.args[0] == {"status": "cancelled"}
     assert orders_table.eq.call_args.args == ("id", "order-uuid-1")
+
+
+def test_extras_become_order_lines_and_stripe_lines(monkeypatch):
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    body = {**VALID_BODY, "lines": VALID_BODY["lines"] + [{"extra_id": "x1", "qty": 2},
+                                                         {"extra_id": "x2", "qty": 1}]}
+    resp, sc, db = post(body, OPEN_NOW)
+    assert resp.status_code == 200, resp.text
+    items = db.table("order_items").insert.call_args.args[0]
+    assert [(i["kind"], i["pack_size"], i["dish_name"], i["qty"], i["unit_price"]) for i in items] == [
+        ("pack", 10, "Cochinita", 1, 85.0),
+        ("extra", None, "Salsa roja", 2, 2.5),
+        ("extra", None, "Tortillas · maiz", 1, 0.0),
+    ]
+    names = [li["price_data"]["product_data"]["name"] for li in sc.call_args.kwargs["line_items"]]
+    # the free tortillas are on the order but not a Stripe line
+    assert names == ["10-meal pack · Cochinita", "Salsa roja", "Order fee"]
+    amounts = [li["price_data"]["unit_amount"] * li["quantity"] for li in sc.call_args.kwargs["line_items"]]
+    assert sum(amounts) == 8500 + 500 + 400
+
+
+def test_extras_only_cart_400(monkeypatch):
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    resp, _, _ = post({**VALID_BODY, "lines": [{"extra_id": "x1", "qty": 1}]}, OPEN_NOW)
+    assert resp.status_code == 400
+    assert "meal pack" in resp.json()["detail"]

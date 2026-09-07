@@ -35,12 +35,22 @@ def _html_wrap(body: str) -> str:
 </div>"""
 
 
+def _label(i: dict) -> str:
+    if i.get("kind", "pack") == "pack":
+        return f"{i['pack_size']}-meal pack · {i['dish_name']}"
+    return str(i["dish_name"])
+
+
+def _price(i: dict) -> str:
+    return "included" if float(i.get("unit_price") or 0) == 0 else f"€{_eur(i['unit_price'])}"
+
+
 def _items_html(items: list[dict]) -> str:
     rows = "".join(
         f'<tr><td style="padding:7px 0;border-bottom:1px solid #ece0cb;">'
-        f'{i["qty"]}&times; {i["pack_size"]}-meal pack &middot; {_esc(i["dish_name"])}</td>'
+        f'{i["qty"]}&times; {_esc(_label(i))}</td>'
         f'<td style="padding:7px 0;border-bottom:1px solid #ece0cb;text-align:right;white-space:nowrap;">'
-        f'&euro;{_eur(i["unit_price"])}</td></tr>'
+        f'{_price(i).replace("€", "&euro;")}</td></tr>'
         for i in items
     )
     return f'<table style="width:100%;border-collapse:collapse;font-size:14.5px;color:#3d1f18;">{rows}</table>' 
@@ -89,9 +99,7 @@ def _admins() -> list[str]:
 
 
 def _items_text(items: list[dict]) -> str:
-    return "\n".join(
-        f"  {i['qty']}× {i['pack_size']}-meal pack · {i['dish_name']} — €{_eur(i['unit_price'])}"
-        for i in items)
+    return "\n".join(f"  {i['qty']}× {_label(i)} — {_price(i)}" for i in items)
 
 
 def _long_date(d: date) -> str:
