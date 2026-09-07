@@ -91,33 +91,42 @@ function buildPhases(settings: Settings) {
   const firstDelivery = deliveryDays[0] ?? settings.cook_day;
   const lastDelivery = deliveryDays[deliveryDays.length - 1] ?? settings.cook_day;
   const cutoff = String(settings.cutoff_time).slice(0, 5);
+  const deliveredRange =
+    firstDelivery === lastDelivery ? firstDelivery : `${firstDelivery} → ${lastDelivery}`;
   return [
     {
+      num: "01",
       short: `${s(settings.open_day)} → ${s(settings.close_day)}`,
-      title: "Orders open",
-      note: `Pick your packs and sides. The list closes ${settings.close_day} at ${cutoff}.`,
+      title: `You order ${settings.open_day} → ${settings.close_day}`,
+      note: `Pick a 4-meal or 10-meal pack, choose your dishes and sides, pay by card. The list closes ${settings.close_day} at ${cutoff} and opens again ${settings.open_day} morning.`,
       bg: "#ece0cb",
       fg: "#3d1f18",
+      accent: "#c8492a",
     },
     {
+      num: "02",
       short: s(settings.cook_day),
-      title: "Cooking day",
-      note: "Market at dawn, pots on all day. We only cook what was ordered.",
+      title: `We cook on ${settings.cook_day}`,
+      note: "Market in the morning, kitchen all day. We only buy and cook what was actually ordered — nothing frozen, no waste.",
       bg: "#e8724f",
       fg: "#fdf6e8",
+      accent: "#fdf6e8",
     },
     {
+      num: "03",
       short: firstDelivery === lastDelivery ? s(firstDelivery) : `${s(firstDelivery)} → ${s(lastDelivery)}`,
-      title: "Delivery",
-      note: `Evenings, ${settings.delivery_window}. ${settings.delivery_area}.`,
+      title: `Delivered ${deliveredRange}`,
+      note: `Choose your day at checkout. Evenings, ${settings.delivery_window}, ${settings.delivery_area}. Meals arrive portioned and sealed with reheating notes — fridge for 4 days, freezer for a month.`,
       bg: "#7fae86",
       fg: "#1e3a25",
+      accent: "#1e3a25",
     },
   ];
 }
 
 export default function Rhythm({ settings }: { settings: Settings }) {
-  const tiles = RHYTHM_VIEW === "phases" ? buildPhases(settings) : buildWeek(settings);
+  const week = buildWeek(settings);
+  const phases = buildPhases(settings);
   const deliveryDays = settings.delivery_days;
   const firstDelivery = deliveryDays[0] ?? settings.cook_day;
   const lastDelivery = deliveryDays[deliveryDays.length - 1] ?? settings.cook_day;
@@ -167,43 +176,76 @@ export default function Rhythm({ settings }: { settings: Settings }) {
           is done at home — big clay pots, slow, all at once.
         </p>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 42 }}>
-          {tiles.map((day) => (
-            <div
-              key={day.short}
-              style={{
-                flex: RHYTHM_VIEW === "phases" ? "1 1 220px" : "1 1 118px",
-                minWidth: 0,
-                borderRadius: 12,
-                padding: RHYTHM_VIEW === "phases" ? "20px 18px" : "16px 14px",
-                minHeight: RHYTHM_VIEW === "phases" ? 120 : 140,
-                display: "flex",
-                flexDirection: "column",
-                background: day.bg,
-                color: day.fg,
-              }}
-            >
-              <span
+        {RHYTHM_VIEW === "phases" ? (
+          // One generous card per phase: number, day range, step title, step text.
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+            {phases.map((p) => (
+              <div
+                key={p.num}
                 style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.14em",
-                  textTransform: "uppercase",
-                  opacity: 0.75,
-                  marginBottom: 12,
+                  flex: "1 1 300px",
+                  minWidth: 0,
+                  borderRadius: 18,
+                  padding: "clamp(24px, 2.8vw, 36px)",
+                  minHeight: 250,
+                  display: "flex",
+                  flexDirection: "column",
+                  background: p.bg,
+                  color: p.fg,
                 }}
               >
-                {day.short}
-              </span>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: RHYTHM_VIEW === "phases" ? 19 : 15.5, lineHeight: 1.2, marginBottom: 6 }}>
-                  {day.title}
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
+                  <span style={{ fontWeight: 700, fontSize: 38, lineHeight: 1, letterSpacing: "-0.02em", color: p.accent }}>
+                    {p.num}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", opacity: 0.75 }}>
+                    {p.short}
+                  </span>
                 </div>
-                <div style={{ fontSize: RHYTHM_VIEW === "phases" ? 13.5 : 12.5, lineHeight: 1.5, opacity: 0.85 }}>{day.note}</div>
+                <h3 style={{ fontWeight: 700, fontSize: "clamp(23px, 2.3vw, 30px)", lineHeight: 1.12, letterSpacing: "-0.02em", margin: "0 0 12px" }}>
+                  {p.title}
+                </h3>
+                <p style={{ fontSize: "clamp(15px, 1.3vw, 16.5px)", lineHeight: 1.65, margin: 0, opacity: 0.9 }}>{p.note}</p>
               </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 42 }}>
+              {week.map((day) => (
+                <div
+                  key={day.short}
+                  style={{
+                    flex: "1 1 118px",
+                    minWidth: 0,
+                    borderRadius: 12,
+                    padding: "16px 14px",
+                    minHeight: 140,
+                    display: "flex",
+                    flexDirection: "column",
+                    background: day.bg,
+                    color: day.fg,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: "0.14em",
+                      textTransform: "uppercase",
+                      opacity: 0.75,
+                      marginBottom: 12,
+                    }}
+                  >
+                    {day.short}
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15.5, lineHeight: 1.2, marginBottom: 6 }}>{day.title}</div>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.45, opacity: 0.82 }}>{day.note}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
         <div
           style={{
@@ -252,6 +294,8 @@ export default function Rhythm({ settings }: { settings: Settings }) {
             </p>
           </div>
         </div>
+          </>
+        )}
       </div>
     </section>
   );
