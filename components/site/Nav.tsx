@@ -1,12 +1,21 @@
 "use client";
 import { useState } from "react";
+import type { Settings } from "@/lib/types";
 
-const TICKER_ITEMS = [
-  "Como en casa, but in Amsterdam",
-  "More than tacos, more than guisos",
-  "We cook every Monday",
-  "Delivered Mon → Wed",
-];
+const SHORT: Record<string, string> = { Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", Saturday: "Sat", Sunday: "Sun" };
+
+// Schedule lines follow the admin settings so a delivery-day change never
+// leaves stale copy in the banner.
+function tickerItems(settings?: Settings): string[] {
+  const items = ["Como en casa, but in Amsterdam", "More than tacos, more than guisos"];
+  if (!settings) return items;
+  const days = settings.delivery_days;
+  const first = days[0];
+  const last = days[days.length - 1];
+  items.push(`We cook every ${settings.cook_day}`);
+  if (first) items.push(first === last ? `Delivered ${SHORT[first] ?? first}` : `Delivered ${SHORT[first] ?? first} → ${SHORT[last] ?? last}`);
+  return items;
+}
 
 const LINKS = [
   { href: "#howitworks", label: "How it works" },
@@ -14,8 +23,9 @@ const LINKS = [
   { href: "#business", label: "Events" },
 ];
 
-export default function Nav() {
+export default function Nav({ settings }: { settings?: Settings }) {
   const [open, setOpen] = useState(false);
+  const TICKER_ITEMS = tickerItems(settings);
 
   return (
     <div>
