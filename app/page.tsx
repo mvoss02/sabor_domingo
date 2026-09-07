@@ -14,7 +14,7 @@ export default async function Home() {
   const data = await getSiteData();
   return (
     <main>
-      <Nav />
+      <Nav settings={data.settings} />
       <Hero hero={data.hero} images={data.images} settings={data.settings} />
       <Rhythm settings={data.settings} />
       <PackBuilder dishes={data.dishes} extras={data.extras} settings={data.settings} />
