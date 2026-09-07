@@ -13,6 +13,7 @@ export interface Settings {
   price_10: number;
   order_fee: number;
   max_packs: number;
+  max_extras: number;
   open_day: string;
   close_day: string;
   cutoff_time: string;
@@ -24,9 +25,22 @@ export interface Settings {
   closed_message: string;
 }
 
+export interface Extra {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  included: boolean;
+  max_qty: number;
+  available: boolean;
+  image_path: string | null;
+  sort_order: number;
+}
+
 export interface OrderItem {
   id: string;
-  pack_size: number;
+  kind: "pack" | "extra";
+  pack_size: number | null;
   dish_name: string;
   qty: number;
   unit_price: number;

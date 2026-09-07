@@ -25,7 +25,7 @@ const muted: React.CSSProperties = { color: "#a1806f", fontSize: 12.5 };
 const h2: React.CSSProperties = { fontWeight: 600, fontSize: 15, margin: "0 0 8px", color: "#c8492a" };
 
 function meals(o: Order): number {
-  return o.order_items.reduce((n, i) => n + i.qty * i.pack_size, 0);
+  return o.order_items.filter((i) => i.kind !== "extra").reduce((n, i) => n + i.qty * (i.pack_size ?? 0), 0);
 }
 
 /** Last delivery date of a cycle, given the configured delivery weekdays. */
@@ -124,16 +124,22 @@ export default function OrdersTab() {
     (o) => matchesStatus(o, statusFilter) && (dayFilter === "all" || deliveryDate(o.cook_date, o.delivery_day) === dayFilter)
   );
 
-  // What to cook: meals per dish across PAID orders in view (respecting day filter).
-  const cookSummary = useMemo(() => {
+  // What to cook: meals per dish across PAID orders in view (respecting day
+  // filter); extras (sides) are counted separately by unit.
+  const { cookSummary, extrasSummary } = useMemo(() => {
     const byDish: Record<string, number> = {};
+    const byExtra: Record<string, number> = {};
     paidInView
       .filter((o) => dayFilter === "all" || deliveryDate(o.cook_date, o.delivery_day) === dayFilter)
       .flatMap((o) => o.order_items)
       .forEach((i) => {
-        byDish[i.dish_name] = (byDish[i.dish_name] ?? 0) + i.qty * i.pack_size;
+        if (i.kind === "extra") byExtra[i.dish_name] = (byExtra[i.dish_name] ?? 0) + i.qty;
+        else byDish[i.dish_name] = (byDish[i.dish_name] ?? 0) + i.qty * (i.pack_size ?? 0);
       });
-    return Object.entries(byDish).sort((a, b) => b[1] - a[1]);
+    return {
+      cookSummary: Object.entries(byDish).sort((a, b) => b[1] - a[1]),
+      extrasSummary: Object.entries(byExtra).sort((a, b) => b[1] - a[1]),
+    };
   }, [paidInView, dayFilter]);
 
   // Deliveries per date across PAID orders in view.
@@ -263,6 +269,19 @@ export default function OrdersTab() {
               {cookSummary.map(([dish, n]) => (
                 <span key={dish} style={{ fontSize: 14, color: "#5e1d22" }}>
                   <strong>{n}</strong> meals · {dish}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {extrasSummary.length > 0 && (
+          <>
+            <h2 style={h2}>Sides to prepare{dayFilter !== "all" ? ` · ${fmtDate(dayFilter)} only` : ""}</h2>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginBottom: 12 }}>
+              {extrasSummary.map(([name, n]) => (
+                <span key={name} style={{ fontSize: 14, color: "#5e1d22" }}>
+                  <strong>{n}</strong> × {name}
                 </span>
               ))}
             </div>

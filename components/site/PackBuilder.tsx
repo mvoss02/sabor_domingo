@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { imageUrl } from "@/lib/content";
 import { eur, isWindowOpen } from "@/lib/window";
 import { suggestEmail } from "@/lib/emailSuggest";
-import type { Dish, Settings } from "@/lib/types";
+import type { Dish, Extra, Settings } from "@/lib/types";
+
+const unitPrice = (x: Extra) => (x.included ? 0 : Number(x.price));
 
 const fieldStyle: React.CSSProperties = {
   width: "100%",
@@ -25,9 +27,11 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
-export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; settings: Settings }) {
+export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish[]; extras: Extra[]; settings: Settings }) {
   const [packSize, setPackSize] = useState<4 | 10>(10);
   const [cart, setCart] = useState<Record<string, number>>({});
+  // extras are keyed by extra id; they only ship alongside at least one pack
+  const [extrasCart, setExtrasCart] = useState<Record<string, number>>({});
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -46,7 +50,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
   const priceOf = (size: number) => (size === 4 ? settings.price_4 : settings.price_10);
   // cart keys are `${dishId}|${packSize}` so 4- and 10-meal packs mix freely
   const totalPacks = useMemo(() => Object.values(cart).reduce((a, b) => a + b, 0), [cart]);
-  const subtotal = useMemo(
+  const packsSubtotal = useMemo(
     () =>
       Object.entries(cart).reduce((sum, [key, qty]) => {
         const size = Number(key.split("|")[1]);
@@ -54,6 +58,18 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
       }, 0),
     [cart, settings.price_4, settings.price_10] // eslint-disable-line react-hooks/exhaustive-deps
   ); // display only; server recomputes
+  const extrasSubtotal = useMemo(
+    () =>
+      Object.entries(extrasCart).reduce((sum, [id, qty]) => {
+        const x = extras.find((e) => e.id === id);
+        return sum + qty * (x ? unitPrice(x) : 0);
+      }, 0),
+    [extrasCart, extras]
+  );
+  const totalExtras = useMemo(() => Object.values(extrasCart).reduce((a, b) => a + b, 0), [extrasCart]);
+  const maxExtras = settings.max_extras ?? 10;
+  const extrasLeft = maxExtras - totalExtras;
+  const subtotal = packsSubtotal + extrasSubtotal;
   const total = totalPacks > 0 ? subtotal + settings.order_fee : 0;
   const packsLeft = settings.max_packs - totalPacks;
   const postalOk = /^\d{4}\s?[A-Za-z]{2}$/.test(form.postal_code.trim());
@@ -115,13 +131,24 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
     setPackSize(size);
   }
 
+  function addExtra(x: Extra, delta: number) {
+    setExtrasCart((c) => {
+      if (delta > 0 && totalExtras >= maxExtras) return c;
+      const next = Math.min(x.max_qty ?? 5, Math.max(0, (c[x.id] ?? 0) + delta));
+      const copy = { ...c, [x.id]: next };
+      if (next === 0) delete copy[x.id];
+      return copy;
+    });
+  }
+
   async function submit() {
     setSubmitting(true);
     setError(null);
-    const lines = Object.entries(cart).map(([key, qty]) => {
+    const lines: object[] = Object.entries(cart).map(([key, qty]) => {
       const [dish_id, size] = key.split("|");
       return { dish_id, pack_size: Number(size), qty };
     });
+    for (const [extra_id, qty] of Object.entries(extrasCart)) lines.push({ extra_id, qty });
     try {
       const res = await fetch("/api/py/checkout", {
         method: "POST",
@@ -156,13 +183,24 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
     },
   ];
 
-  const cartLines = Object.entries(cart)
-    .map(([key, qty]) => {
-      const [dishId, sizeStr] = key.split("|");
-      const dish = dishes.find((d) => d.id === dishId);
-      return dish ? { key, qty, dish, size: Number(sizeStr) } : null;
-    })
-    .filter(Boolean) as { key: string; qty: number; dish: Dish; size: number }[];
+  type SummaryLine = { key: string; qty: number; label: string; amount: number };
+  const cartLines: SummaryLine[] = [
+    ...(Object.entries(cart)
+      .map(([key, qty]) => {
+        const [dishId, sizeStr] = key.split("|");
+        const dish = dishes.find((d) => d.id === dishId);
+        const size = Number(sizeStr);
+        return dish ? { key, qty, label: `${size}-meal · ${dish.name}`, amount: qty * priceOf(size) } : null;
+      })
+      .filter(Boolean) as SummaryLine[]),
+    ...(Object.entries(extrasCart)
+      .map(([id, qty]) => {
+        const x = extras.find((e) => e.id === id);
+        return x ? { key: `x|${id}`, qty, label: x.name, amount: qty * unitPrice(x) } : null;
+      })
+      .filter(Boolean) as SummaryLine[]),
+  ];
+  const extrasAvailableCount = extras.length;
 
   return (
     <section
@@ -310,14 +348,15 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {dishes
-              .filter((d) => d.available)
               .map((d) => {
                 const qty = cart[`${d.id}|${packSize}`] ?? 0;
                 const img = imageUrl(d.image_path);
                 const isMeat = d.tag === "Meat";
+                const soldOut = !d.available;
                 return (
                   <div
                     key={d.id}
+                    aria-disabled={soldOut}
                     style={{
                       background: "#fdf6e8",
                       borderRadius: 14,
@@ -327,6 +366,8 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                       gap: 14,
                       alignItems: "center",
                       justifyContent: "space-between",
+                      opacity: soldOut ? 0.5 : 1,
+                      filter: soldOut ? "grayscale(1)" : "none",
                     }}
                   >
                     <div style={{ width: 80, height: 80, flex: "0 0 auto" }}>
@@ -375,6 +416,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                         >
                           {d.tag}
                         </span>
+                        {soldOut && <SoldOutBadge />}
                       </div>
                       <p style={{ fontSize: 13.5, lineHeight: 1.55, color: "#6a4a3f", margin: "6px 0 0" }}>
                         {d.description}
@@ -395,6 +437,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                       <button
                         type="button"
                         onClick={() => add(d.id, -1)}
+                        disabled={soldOut}
                         aria-label="Remove one pack"
                         className="sd-qty-dec"
                         style={{
@@ -418,6 +461,7 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                       <button
                         type="button"
                         onClick={() => add(d.id, 1)}
+                        disabled={soldOut}
                         aria-label="Add one pack"
                         className="sd-qty-inc"
                         style={{
@@ -441,9 +485,114 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                 );
               })}
           </div>
+
+          {extrasAvailableCount > 0 && (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  margin: "34px 0 12px",
+                }}
+              >
+                <h3
+                  style={{
+                    fontWeight: 600,
+                    fontSize: 13,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "#a1806f",
+                    margin: 0,
+                  }}
+                >
+                  3 · Choose your sides
+                </h3>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#c8492a" }}>
+                  {extrasLeft > 0 ? `${extrasLeft} of ${maxExtras} sides left` : "Sides limit reached"}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {extras.map((x) => {
+                  const qty = extrasCart[x.id] ?? 0;
+                  const img = imageUrl(x.image_path);
+                  const soldOut = !x.available;
+                  const free = unitPrice(x) === 0;
+                  const atCap = qty >= (x.max_qty ?? 5) || extrasLeft <= 0;
+                  return (
+                    <div
+                      key={x.id}
+                      aria-disabled={soldOut}
+                      style={{
+                        background: "#fdf6e8",
+                        borderRadius: 14,
+                        padding: "10px 12px 10px 10px",
+                        display: "flex",
+                        gap: 12,
+                        alignItems: "center",
+                        opacity: soldOut ? 0.5 : 1,
+                        filter: soldOut ? "grayscale(1)" : "none",
+                      }}
+                    >
+                      <div style={{ width: 56, height: 56, flex: "0 0 auto" }}>
+                        {img ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={img} alt={x.name} style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", display: "block" }} />
+                        ) : (
+                          <div style={{ width: 56, height: 56, borderRadius: 10, background: "repeating-linear-gradient(135deg, #ece0cb 0 8px, #f6eee0 8px 16px)" }} />
+                        )}
+                      </div>
+                      <div style={{ flex: "1 1 120px", minWidth: 0 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontWeight: 700, fontSize: 15.5, color: "#5e1d22", lineHeight: 1.2 }}>{x.name}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: free ? "#2e6b3e" : "#c8492a" }}>
+                            {free ? "included" : eur(Number(x.price))}
+                          </span>
+                          {soldOut && <SoldOutBadge />}
+                        </div>
+                        {x.description && (
+                          <p style={{ fontSize: 12.5, lineHeight: 1.45, color: "#6a4a3f", margin: "3px 0 0" }}>{x.description}</p>
+                        )}
+                      </div>
+                      <div
+                        className="sd-stepper"
+                        style={{ display: "flex", alignItems: "center", gap: 2, borderRadius: 999, padding: 3, background: "#f6eee0", flex: "0 0 auto" }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => addExtra(x, -1)}
+                          disabled={soldOut || qty === 0}
+                          aria-label={`One less ${x.name}`}
+                          className="sd-qty-dec"
+                          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "transparent", fontSize: 20, cursor: "pointer", color: "#5e1d22", lineHeight: 1 }}
+                        >
+                          –
+                        </button>
+                        <span className="sd-qty-count" style={{ minWidth: 22, textAlign: "center", fontWeight: 700, fontSize: 15, color: "#5e1d22" }}>
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => addExtra(x, 1)}
+                          disabled={soldOut || atCap}
+                          aria-label={`One more ${x.name}`}
+                          className="sd-qty-inc"
+                          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "#c8492a", color: "#fdf6e8", fontSize: 20, cursor: "pointer", lineHeight: 1, opacity: atCap ? 0.4 : 1 }}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
           <p style={{ fontSize: 12.5, color: "#a1806f", margin: "14px 0 0", lineHeight: 1.6 }}>
-            Every pack comes with tortillas and one of our salsas. Allergies or no spice? Tell us in
-            the notes.
+            Sides ride along with your packs. Allergies or no spice? Tell us in the notes.
           </p>
         </div>
 
@@ -496,11 +645,10 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
                     }}
                   >
                     <span style={{ fontSize: 14, minWidth: 0 }}>
-                      <span style={{ fontWeight: 700, color: "#f2a63b" }}>{line.qty}×</span>{" "}
-                      {line.size}-meal · {line.dish.name}
+                      <span style={{ fontWeight: 700, color: "#f2a63b" }}>{line.qty}×</span> {line.label}
                     </span>
                     <span style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>
-                      {eur(line.qty * priceOf(line.size))}
+                      {line.amount === 0 ? "included" : eur(line.amount)}
                     </span>
                   </div>
                 ))}
@@ -726,5 +874,24 @@ export default function PackBuilder({ dishes, settings }: { dishes: Dish[]; sett
         </div>
       </div>
     </section>
+  );
+}
+
+function SoldOutBadge() {
+  return (
+    <span
+      style={{
+        fontSize: 10.5,
+        fontWeight: 600,
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        background: "#5e1d22",
+        color: "#fdf6e8",
+        borderRadius: 999,
+        padding: "3px 9px",
+      }}
+    >
+      Sold out
+    </span>
   );
 }

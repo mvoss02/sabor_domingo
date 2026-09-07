@@ -116,3 +116,14 @@ def test_cook_and_delivery_dates():
         ("Monday 7 September", "Monday 7 September")
     assert emails.cook_and_delivery({"cook_date": "2026-09-07", "delivery_day": "Tuesday"}) == \
         ("Monday 7 September", "Tuesday 8 September")
+
+
+def test_items_text_handles_extras_and_included():
+    items = ITEMS + [{"kind": "extra", "pack_size": None, "dish_name": "Salsa roja", "qty": 2, "unit_price": 2.5},
+                     {"kind": "extra", "pack_size": None, "dish_name": "Tortillas · maiz", "qty": 1, "unit_price": 0}]
+    text = emails._items_text(items)
+    assert "1× 10-meal pack · Cochinita — €85.00" in text
+    assert "2× Salsa roja — €2.50" in text
+    assert "1× Tortillas · maiz — included" in text
+    html = emails._items_html(items)
+    assert "Salsa roja" in html and "included" in html and "&euro;2.50" in html

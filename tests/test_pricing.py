@@ -64,3 +64,57 @@ def test_zero_or_negative_qty_rejected():
         price_order([{"dish_id": "d1", "pack_size": 4, "qty": 0}], DISHES, SETTINGS)
     with pytest.raises(CartError):
         price_order([{"dish_id": "d1", "pack_size": 4, "qty": -1}], DISHES, SETTINGS)
+
+
+# --- extras ---------------------------------------------------------------------
+
+EXTRAS = [
+    {"id": "x1", "name": "Salsa roja", "price": 2.5, "included": False, "max_qty": 5, "available": True},
+    {"id": "x2", "name": "Tortillas · maiz", "price": 3, "included": True, "max_qty": 5, "available": True},
+    {"id": "x3", "name": "Pickled onions", "price": 1.5, "included": False, "max_qty": 5, "available": False},
+    {"id": "x4", "name": "Lime wedges", "price": 1, "included": False, "max_qty": 2, "available": True},
+]
+SETTINGS_X = {**SETTINGS, "max_extras": 6}
+PACK = {"dish_id": "d1", "pack_size": 10, "qty": 1}
+
+
+def test_extras_added_to_subtotal():
+    t = price_order([PACK, {"extra_id": "x1", "qty": 2}], DISHES, SETTINGS, EXTRAS)
+    assert t.subtotal_cents == 8500 + 2 * 250
+    extra = [i for i in t.items if i.kind == "extra"][0]
+    assert (extra.dish_name, extra.pack_size, extra.qty, extra.unit_price_cents) == ("Salsa roja", None, 2, 250)
+    assert extra.label == "Salsa roja"
+    assert t.items[0].label == "10-meal pack · Cochinita"
+
+
+def test_included_extra_is_free_even_with_a_stored_price():
+    t = price_order([PACK, {"extra_id": "x2", "qty": 1}], DISHES, SETTINGS, EXTRAS)
+    assert t.subtotal_cents == 8500
+    assert t.items[1].unit_price_cents == 0
+
+
+def test_extras_without_a_pack_rejected():
+    with pytest.raises(CartError, match="at least one meal pack"):
+        price_order([{"extra_id": "x1", "qty": 1}], DISHES, SETTINGS, EXTRAS)
+
+
+def test_sold_out_extra_rejected():
+    with pytest.raises(CartError, match="sold out"):
+        price_order([PACK, {"extra_id": "x3", "qty": 1}], DISHES, SETTINGS, EXTRAS)
+
+
+def test_unknown_extra_rejected():
+    with pytest.raises(CartError):
+        price_order([PACK, {"extra_id": "nope", "qty": 1}], DISHES, SETTINGS, EXTRAS)
+
+
+def test_extra_per_item_cap():
+    with pytest.raises(CartError, match="Maximum 2× Lime wedges"):
+        price_order([PACK, {"extra_id": "x4", "qty": 3}], DISHES, SETTINGS_X, EXTRAS)
+    price_order([PACK, {"extra_id": "x4", "qty": 2}], DISHES, SETTINGS_X, EXTRAS)  # at the cap is fine
+
+
+def test_extras_global_cap():
+    with pytest.raises(CartError, match="Maximum 6 sides"):
+        price_order([PACK, {"extra_id": "x1", "qty": 5}, {"extra_id": "x2", "qty": 2}], DISHES, SETTINGS_X, EXTRAS)
+    price_order([PACK, {"extra_id": "x1", "qty": 4}, {"extra_id": "x2", "qty": 2}], DISHES, SETTINGS_X, EXTRAS)

@@ -14,8 +14,10 @@ AMS = ZoneInfo("Europe/Amsterdam")
 
 
 class CartLine(BaseModel):
-    dish_id: str
-    pack_size: int
+    # A pack line carries dish_id + pack_size; an extra line carries extra_id.
+    dish_id: str | None = None
+    extra_id: str | None = None
+    pack_size: int | None = None
     qty: int
 
 
@@ -47,6 +49,7 @@ def create_checkout(payload: CheckoutPayload) -> str:
     client = get_client()
     settings = client.table("settings").select("*").eq("id", 1).execute().data[0]
     dishes = client.table("dishes").select("*").execute().data
+    extras = client.table("extras").select("*").execute().data
 
     now = _now()
     if not window_is_open(settings, now):
@@ -54,7 +57,7 @@ def create_checkout(payload: CheckoutPayload) -> str:
     if payload.delivery_day not in settings["delivery_days"]:
         raise CartError("Invalid delivery day.")
 
-    totals = price_order([l.model_dump() for l in payload.lines], dishes, settings)
+    totals = price_order([l.model_dump() for l in payload.lines], dishes, settings, extras)
 
     order = client.table("orders").insert({
         "status": "pending_payment",
@@ -69,8 +72,8 @@ def create_checkout(payload: CheckoutPayload) -> str:
     }).execute().data[0]
 
     client.table("order_items").insert([{
-        "order_id": order["id"], "pack_size": i.pack_size, "dish_name": i.dish_name,
-        "qty": i.qty, "unit_price": i.unit_price_cents / 100,
+        "order_id": order["id"], "kind": i.kind, "pack_size": i.pack_size,
+        "dish_name": i.dish_name, "qty": i.qty, "unit_price": i.unit_price_cents / 100,
     } for i in totals.items]).execute()
 
     stripe.api_key = env("STRIPE_SECRET_KEY")
@@ -79,14 +82,16 @@ def create_checkout(payload: CheckoutPayload) -> str:
         session = stripe.checkout.Session.create(
             mode="payment",
             customer_email=payload.email,
+            # €0 extras ("included") are kept on the order but not sent to
+            # Stripe as line items.
             line_items=[{
                 "price_data": {
                     "currency": "eur",
-                    "product_data": {"name": f"{i.pack_size}-meal pack · {i.dish_name}"},
+                    "product_data": {"name": i.label},
                     "unit_amount": i.unit_price_cents,
                 },
                 "quantity": i.qty,
-            } for i in totals.items] + [{
+            } for i in totals.items if i.unit_price_cents > 0] + [{
                 "price_data": {
                     "currency": "eur",
                     "product_data": {"name": "Order fee"},

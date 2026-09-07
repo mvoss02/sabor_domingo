@@ -34,6 +34,11 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** "10-meal · Cochinita" for packs, just the name for extras. */
+function lineLabel(i: OrderItem): string {
+  return i.kind === "extra" ? i.dish_name : `${i.pack_size}-meal · ${i.dish_name}`;
+}
+
 type Panel = "none" | "edit" | "refund";
 
 export default function OrderCard({
@@ -111,7 +116,7 @@ export default function OrderCard({
           {o.address}, {o.postal_code}
         </a>
         <br />
-        {o.order_items.map((i) => `${i.qty}× ${i.pack_size}-meal · ${i.dish_name}`).join(", ")}
+        {o.order_items.map((i) => `${i.qty}× ${lineLabel(i)}`).join(", ")}
         {o.notes && (
           <>
             <br />
@@ -235,8 +240,8 @@ function EditPanel({
   }
 
   async function save() {
-    if (items.every((i) => i.qty === 0)) {
-      setMsg("Error: at least one pack must stay. To cancel the whole order, use Refund.");
+    if (items.filter((i) => i.kind !== "extra").every((i) => i.qty === 0)) {
+      setMsg("Error: at least one meal pack must stay. To cancel the whole order, use Refund.");
       return;
     }
     setBusy(true);
@@ -315,7 +320,7 @@ function EditPanel({
                 +
               </button>
               <span style={{ textDecoration: i.qty === 0 ? "line-through" : "none" }}>
-                {i.pack_size}-meal · {i.dish_name} · {eur(Number(i.unit_price))} each
+                {lineLabel(i)} · {Number(i.unit_price) === 0 ? "included" : `${eur(Number(i.unit_price))} each`}
               </span>
             </div>
           ))}
@@ -435,7 +440,7 @@ function RefundPanel({
       setBusy(false);
       return setMsg("Error: session expired — log in again");
     }
-    const autoReason = removing.map((i) => `${picks[i.id]}× ${i.pack_size}-meal ${i.dish_name}`).join(", ");
+    const autoReason = removing.map((i) => `${picks[i.id]}× ${lineLabel(i)}`).join(", ");
     const res = await fetch(`/api/py/admin/orders/${o.id}/refund`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -476,7 +481,7 @@ function RefundPanel({
   const confirmText = full
     ? `Send ${eur(amt)} back to the customer and cancel #SD-${o.ref_num}? This can't be undone.`
     : removing.length > 0
-      ? `Send ${eur(amt)} back and remove ${removing.map((i) => `${picks[i.id]}× ${i.pack_size}-meal ${i.dish_name}`).join(", ")} from #SD-${o.ref_num}? This can't be undone.`
+      ? `Send ${eur(amt)} back and remove ${removing.map((i) => `${picks[i.id]}× ${lineLabel(i)}`).join(", ")} from #SD-${o.ref_num}? This can't be undone.`
       : `Send ${eur(amt)} back to the customer for #SD-${o.ref_num}? This can't be undone.`;
 
   return (
@@ -488,7 +493,7 @@ function RefundPanel({
       </div>
 
       <div>
-        <span style={adminLabel}>Packs to refund &amp; remove</span>
+        <span style={adminLabel}>Items to refund &amp; remove</span>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {o.order_items.map((i) => {
             const q = picks[i.id] ?? 0;
@@ -504,7 +509,7 @@ function RefundPanel({
                   +
                 </button>
                 <span style={{ color: q > 0 ? "#c8492a" : "#5e1d22", fontWeight: q > 0 ? 600 : 400 }}>
-                  {i.pack_size}-meal · {i.dish_name} · {eur(Number(i.unit_price))} each
+                  {lineLabel(i)} · {Number(i.unit_price) === 0 ? "included" : `${eur(Number(i.unit_price))} each`}
                   {q > 0 && <> → {eur(round2(q * Number(i.unit_price)))}</>}
                 </span>
               </div>
