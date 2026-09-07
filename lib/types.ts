@@ -13,6 +13,7 @@ export interface Settings {
   price_10: number;
   order_fee: number;
   max_packs: number;
+  max_extras: number;
   open_day: string;
   close_day: string;
   cutoff_time: string;
@@ -29,6 +30,8 @@ export interface Extra {
   name: string;
   description: string;
   price: number;
+  included: boolean;
+  max_qty: number;
   available: boolean;
   image_path: string | null;
   sort_order: number;

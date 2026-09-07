@@ -34,6 +34,45 @@ function SoldOutToggle({ available, onChange }: { available: boolean; onChange: 
   );
 }
 
+function PillSwitch<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div style={{ display: "inline-flex", background: "#f6eee0", borderRadius: 999, padding: 3, gap: 2 }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            aria-pressed={on}
+            style={{
+              minHeight: 34,
+              padding: "6px 14px",
+              borderRadius: 999,
+              border: "none",
+              background: on ? "#5e1d22" : "transparent",
+              color: on ? "#fdf6e8" : "#5e1d22",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function MenuTab() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [extras, setExtras] = useState<Extra[]>([]);
@@ -112,7 +151,14 @@ export default function MenuTab() {
     if (Number(x.price) < 0) return setStatus("Error: price can't be negative");
     const { error } = await supabase
       .from("extras")
-      .update({ name: x.name, description: x.description, price: Number(x.price), available: x.available })
+      .update({
+        name: x.name,
+        description: x.description,
+        price: Number(x.price),
+        included: x.included,
+        max_qty: Math.max(1, Math.round(Number(x.max_qty) || 1)),
+        available: x.available,
+      })
       .eq("id", x.id);
     setStatus(error ? `Error: ${error.message}` : `Saved “${x.name}”`);
   }
@@ -121,7 +167,7 @@ export default function MenuTab() {
     const sort = Math.max(0, ...extras.map((x) => x.sort_order)) + 1;
     const { data, error } = await supabase
       .from("extras")
-      .insert({ name: "New side", description: "", price: 0, available: true, sort_order: sort })
+      .insert({ name: "New side", description: "", price: 0, included: true, max_qty: 5, available: true, sort_order: sort })
       .select()
       .single();
     if (error) return setStatus(`Error: ${error.message}`);
@@ -165,6 +211,10 @@ export default function MenuTab() {
       setStatus("Error: order fee can't be negative");
       return;
     }
+    if (settings.max_extras <= 0) {
+      setStatus("Error: max sides per order must be greater than 0");
+      return;
+    }
     const { error } = await supabase
       .from("settings")
       .update({
@@ -172,6 +222,7 @@ export default function MenuTab() {
         price_10: settings.price_10,
         order_fee: settings.order_fee,
         max_packs: settings.max_packs,
+        max_extras: settings.max_extras,
       })
       .eq("id", 1);
     setStatus(error ? `Error: ${error.message}` : "Pricing saved");
@@ -300,7 +351,7 @@ export default function MenuTab() {
             Sides &amp; extras
           </h2>
           <p style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#a1806f", margin: "4px 0 0" }}>
-            Step 3 on the site · €0 shows as &ldquo;included&rdquo;
+            Step 3 on the site · included sides are free, priced ones are charged per unit
           </p>
         </div>
         <button type="button" onClick={addExtra} style={adminButton}>
@@ -344,20 +395,45 @@ export default function MenuTab() {
                   <span style={adminLabel}>Name</span>
                   <input type="text" value={x.name} onChange={(e) => editExtra(x.id, { name: e.target.value })} style={adminInput} />
                 </label>
-                <label style={{ flex: "0 1 110px", minWidth: 0 }}>
+                <div style={{ flex: "0 0 auto", paddingBottom: 2 }}>
+                  <SoldOutToggle available={x.available} onChange={(v) => editExtra(x.id, { available: v })} />
+                </div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end", marginTop: 10 }}>
+                <div style={{ flex: "0 0 auto", paddingBottom: 2 }}>
+                  <span style={adminLabel}>Pricing</span>
+                  <PillSwitch
+                    value={x.included ? "included" : "priced"}
+                    options={[
+                      { value: "included", label: "Included" },
+                      { value: "priced", label: "Extra cost" },
+                    ]}
+                    onChange={(v) => editExtra(x.id, { included: v === "included" })}
+                  />
+                </div>
+                <label style={{ flex: "0 1 110px", minWidth: 0, opacity: x.included ? 0.45 : 1 }}>
                   <span style={adminLabel}>Price €</span>
                   <input
                     type="number"
                     step="0.5"
                     min="0"
                     value={x.price}
+                    disabled={x.included}
                     onChange={(e) => editExtra(x.id, { price: Number(e.target.value) })}
                     style={adminInput}
                   />
                 </label>
-                <div style={{ flex: "0 0 auto", paddingBottom: 2 }}>
-                  <SoldOutToggle available={x.available} onChange={(v) => editExtra(x.id, { available: v })} />
-                </div>
+                <label style={{ flex: "0 1 130px", minWidth: 0 }}>
+                  <span style={adminLabel}>Max per order</span>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={x.max_qty}
+                    onChange={(e) => editExtra(x.id, { max_qty: Number(e.target.value) })}
+                    style={adminInput}
+                  />
+                </label>
               </div>
               <label style={{ display: "block", marginTop: 10 }}>
                 <span style={adminLabel}>Description (optional)</span>
@@ -426,6 +502,17 @@ export default function MenuTab() {
                 min="1"
                 value={settings.max_packs}
                 onChange={(e) => setSettings({ ...settings, max_packs: Number(e.target.value) })}
+                style={adminInput}
+              />
+            </label>
+            <label style={{ display: "block" }}>
+              <span style={adminLabel}>Max sides per order (all sides together)</span>
+              <input
+                type="number"
+                step="1"
+                min="1"
+                value={settings.max_extras ?? 10}
+                onChange={(e) => setSettings({ ...settings, max_extras: Number(e.target.value) })}
                 style={adminInput}
               />
             </label>

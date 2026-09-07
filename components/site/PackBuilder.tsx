@@ -5,7 +5,7 @@ import { eur, isWindowOpen } from "@/lib/window";
 import { suggestEmail } from "@/lib/emailSuggest";
 import type { Dish, Extra, Settings } from "@/lib/types";
 
-const MAX_EXTRA_QTY = 10;
+const unitPrice = (x: Extra) => (x.included ? 0 : Number(x.price));
 
 const fieldStyle: React.CSSProperties = {
   width: "100%",
@@ -62,10 +62,13 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
     () =>
       Object.entries(extrasCart).reduce((sum, [id, qty]) => {
         const x = extras.find((e) => e.id === id);
-        return sum + qty * Number(x?.price ?? 0);
+        return sum + qty * (x ? unitPrice(x) : 0);
       }, 0),
     [extrasCart, extras]
   );
+  const totalExtras = useMemo(() => Object.values(extrasCart).reduce((a, b) => a + b, 0), [extrasCart]);
+  const maxExtras = settings.max_extras ?? 10;
+  const extrasLeft = maxExtras - totalExtras;
   const subtotal = packsSubtotal + extrasSubtotal;
   const total = totalPacks > 0 ? subtotal + settings.order_fee : 0;
   const packsLeft = settings.max_packs - totalPacks;
@@ -128,11 +131,12 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
     setPackSize(size);
   }
 
-  function addExtra(id: string, delta: number) {
+  function addExtra(x: Extra, delta: number) {
     setExtrasCart((c) => {
-      const next = Math.min(MAX_EXTRA_QTY, Math.max(0, (c[id] ?? 0) + delta));
-      const copy = { ...c, [id]: next };
-      if (next === 0) delete copy[id];
+      if (delta > 0 && totalExtras >= maxExtras) return c;
+      const next = Math.min(x.max_qty ?? 5, Math.max(0, (c[x.id] ?? 0) + delta));
+      const copy = { ...c, [x.id]: next };
+      if (next === 0) delete copy[x.id];
       return copy;
     });
   }
@@ -192,7 +196,7 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
     ...(Object.entries(extrasCart)
       .map(([id, qty]) => {
         const x = extras.find((e) => e.id === id);
-        return x ? { key: `x|${id}`, qty, label: x.name, amount: qty * Number(x.price) } : null;
+        return x ? { key: `x|${id}`, qty, label: x.name, amount: qty * unitPrice(x) } : null;
       })
       .filter(Boolean) as SummaryLine[]),
   ];
@@ -484,24 +488,39 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
 
           {extrasAvailableCount > 0 && (
             <>
-              <h3
+              <div
                 style={{
-                  fontWeight: 600,
-                  fontSize: 13,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: "#a1806f",
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
                   margin: "34px 0 12px",
                 }}
               >
-                3 · Choose your sides
-              </h3>
+                <h3
+                  style={{
+                    fontWeight: 600,
+                    fontSize: 13,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "#a1806f",
+                    margin: 0,
+                  }}
+                >
+                  3 · Choose your sides
+                </h3>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#c8492a" }}>
+                  {extrasLeft > 0 ? `${extrasLeft} of ${maxExtras} sides left` : "Sides limit reached"}
+                </span>
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {extras.map((x) => {
                   const qty = extrasCart[x.id] ?? 0;
                   const img = imageUrl(x.image_path);
                   const soldOut = !x.available;
-                  const free = Number(x.price) === 0;
+                  const free = unitPrice(x) === 0;
+                  const atCap = qty >= (x.max_qty ?? 5) || extrasLeft <= 0;
                   return (
                     <div
                       key={x.id}
@@ -543,7 +562,7 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
                       >
                         <button
                           type="button"
-                          onClick={() => addExtra(x.id, -1)}
+                          onClick={() => addExtra(x, -1)}
                           disabled={soldOut || qty === 0}
                           aria-label={`One less ${x.name}`}
                           className="sd-qty-dec"
@@ -556,11 +575,11 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
                         </span>
                         <button
                           type="button"
-                          onClick={() => addExtra(x.id, 1)}
-                          disabled={soldOut}
+                          onClick={() => addExtra(x, 1)}
+                          disabled={soldOut || atCap}
                           aria-label={`One more ${x.name}`}
                           className="sd-qty-inc"
-                          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "#c8492a", color: "#fdf6e8", fontSize: 20, cursor: "pointer", lineHeight: 1, opacity: qty >= MAX_EXTRA_QTY ? 0.4 : 1 }}
+                          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "#c8492a", color: "#fdf6e8", fontSize: 20, cursor: "pointer", lineHeight: 1, opacity: atCap ? 0.4 : 1 }}
                         >
                           +
                         </button>

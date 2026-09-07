@@ -34,7 +34,7 @@ function buildWeek(settings: Settings) {
     if (isCook) {
       return {
         short: SHORT[day as keyof typeof SHORT],
-        title: "Cooking day",
+        title: isDelivery ? "Cooking day + deliver" : "Cooking day",
         note: isDelivery
           ? "Market at dawn, pots on all day, first deliveries in the evening."
           : "Market at dawn, pots on all day.",

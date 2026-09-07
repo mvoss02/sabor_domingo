@@ -16,8 +16,8 @@ SETTINGS_ROW = {"price_4": 39, "price_10": 85, "order_fee": 4, "max_packs": 5,
                 "cook_day": "Monday",
                 "window_override": "auto", "delivery_days": ["Monday", "Tuesday", "Wednesday"]}
 DISH_ROWS = [{"id": "d1", "name": "Cochinita", "available": True}]
-EXTRA_ROWS = [{"id": "x1", "name": "Salsa roja", "price": 2.5, "available": True},
-              {"id": "x2", "name": "Tortillas · maiz", "price": 0, "available": True}]
+EXTRA_ROWS = [{"id": "x1", "name": "Salsa roja", "price": 2.5, "included": False, "max_qty": 5, "available": True},
+              {"id": "x2", "name": "Tortillas · maiz", "price": 3, "included": True, "max_qty": 5, "available": True}]
 
 VALID_BODY = {"lines": [{"dish_id": "d1", "pack_size": 10, "qty": 1}],
               "name": "Ana", "email": "ana@example.com",

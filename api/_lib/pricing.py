@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-MAX_EXTRA_QTY = 10
-
 
 class CartError(Exception):
     def __init__(self, message: str):
@@ -49,6 +47,7 @@ def price_order(lines: list[dict], dishes: list[dict], settings: dict,
 
     items: list[Item] = []
     total_packs = 0
+    total_extras = 0
     for line in lines:
         qty = line.get("qty")
         if not isinstance(qty, int) or qty < 1:
@@ -60,9 +59,13 @@ def price_order(lines: list[dict], dishes: list[dict], settings: dict,
                 raise CartError("Unknown extra in cart.")
             if not extra.get("available"):
                 raise CartError(f"'{extra['name']}' is sold out.")
-            if qty > MAX_EXTRA_QTY:
-                raise CartError(f"Maximum {MAX_EXTRA_QTY} of each extra.")
-            items.append(Item(extra["id"], extra["name"], None, qty, _cents(extra["price"]), kind="extra"))
+            max_qty = int(extra.get("max_qty") or 1)
+            if qty > max_qty:
+                raise CartError(f"Maximum {max_qty}× {extra['name']} per order.")
+            # "included" sides ride along free whatever price is stored.
+            unit = 0 if extra.get("included", True) else _cents(extra["price"])
+            total_extras += qty
+            items.append(Item(extra["id"], extra["name"], None, qty, unit, kind="extra"))
             continue
 
         dish = by_id.get(line.get("dish_id"))
@@ -80,6 +83,9 @@ def price_order(lines: list[dict], dishes: list[dict], settings: dict,
         raise CartError("Add at least one meal pack — extras come along with a pack.")
     if total_packs > int(settings["max_packs"]):
         raise CartError(f"Maximum {settings['max_packs']} packs per order.")
+    max_extras = int(settings.get("max_extras") or 10)
+    if total_extras > max_extras:
+        raise CartError(f"Maximum {max_extras} sides per order.")
 
     subtotal = sum(i.unit_price_cents * i.qty for i in items)
     fee = _cents(settings["order_fee"])
