@@ -7,11 +7,13 @@ import type { FaqEntry, HeroContent } from "@/lib/types";
 export default function ContentTab() {
   const [hero, setHero] = useState<HeroContent | null>(null);
   const [faq, setFaq] = useState<FaqEntry[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [heroStatus, setHeroStatus] = useState<string | null>(null);
+  const [faqStatus, setFaqStatus] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.from("site_content").select("key, value").in("key", ["hero", "faq"]).then(({ data, error }) => {
-      if (error) return setStatus(`Error loading — try refreshing or log in again (${error.message})`);
+      if (error) return setLoadError(`Error loading — try refreshing or log in again (${error.message})`);
       for (const row of data ?? []) {
         if (row.key === "hero") setHero(row.value as HeroContent);
         if (row.key === "faq") setFaq((row.value ?? []) as FaqEntry[]);
@@ -22,14 +24,14 @@ export default function ContentTab() {
   async function saveHero() {
     if (!hero) return;
     const { error } = await supabase.from("site_content").update({ value: hero }).eq("key", "hero");
-    setStatus(error ? `Error: ${error.message}` : "Hero text saved");
+    setHeroStatus(error ? `Error: ${error.message}` : "Hero text saved");
   }
 
   async function saveFaq() {
     const clean = faq.filter((f) => f.q.trim() || f.a.trim());
     const { error } = await supabase.from("site_content").update({ value: clean }).eq("key", "faq");
     if (!error) setFaq(clean);
-    setStatus(error ? `Error: ${error.message}` : "FAQ saved");
+    setFaqStatus(error ? `Error: ${error.message}` : "FAQ saved");
   }
 
   function editFaq(i: number, patch: Partial<FaqEntry>) {
@@ -42,11 +44,7 @@ export default function ContentTab() {
         Site text
       </h1>
 
-      {status && (
-        <p style={{ fontSize: 13.5, fontWeight: 600, color: status.startsWith("Error") ? "#c8492a" : "#2e6b3e", margin: "0 0 14px" }}>
-          {status}
-        </p>
-      )}
+      {loadError && <p style={{ fontSize: 13.5, fontWeight: 600, color: "#c8492a", margin: "0 0 14px" }}>{loadError}</p>}
 
       {hero && (
         <div style={{ ...adminCard, marginBottom: 24 }}>
@@ -64,9 +62,12 @@ export default function ContentTab() {
               <span style={adminLabel}>Intro paragraph</span>
               <textarea rows={3} value={hero.body} onChange={(e) => setHero({ ...hero, body: e.target.value })} style={{ ...adminInput, resize: "vertical" }} />
             </label>
-            <button type="button" onClick={saveHero} style={adminButton}>
-              Save hero text
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <button type="button" onClick={saveHero} style={adminButton}>
+                Save hero text
+              </button>
+              {heroStatus && <StatusText text={heroStatus} />}
+            </div>
           </div>
         </div>
       )}
@@ -103,10 +104,19 @@ export default function ContentTab() {
             </div>
           ))}
         </div>
-        <button type="button" onClick={saveFaq} style={{ ...adminButton, marginTop: 14 }}>
-          Save FAQ
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 14 }}>
+          <button type="button" onClick={saveFaq} style={adminButton}>
+            Save FAQ
+          </button>
+          {faqStatus && <StatusText text={faqStatus} />}
+        </div>
       </div>
     </div>
+  );
+}
+
+function StatusText({ text }: { text: string }) {
+  return (
+    <span style={{ fontSize: 13.5, fontWeight: 600, color: text.startsWith("Error") ? "#c8492a" : "#2e6b3e" }}>{text}</span>
   );
 }
