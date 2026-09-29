@@ -14,10 +14,10 @@ AMS = ZoneInfo("Europe/Amsterdam")
 
 
 class CartLine(BaseModel):
-    # A pack line carries dish_id + pack_size; an extra line carries extra_id.
+    # A pack line carries dish_id + size_id; an extra line carries extra_id.
     dish_id: str | None = None
     extra_id: str | None = None
-    pack_size: int | None = None
+    size_id: str | None = None
     qty: int
 
 
@@ -50,6 +50,7 @@ def create_checkout(payload: CheckoutPayload) -> str:
     settings = client.table("settings").select("*").eq("id", 1).execute().data[0]
     dishes = client.table("dishes").select("*").execute().data
     extras = client.table("extras").select("*").execute().data
+    sizes = client.table("pack_sizes").select("*").execute().data
 
     now = _now()
     if not window_is_open(settings, now):
@@ -57,7 +58,7 @@ def create_checkout(payload: CheckoutPayload) -> str:
     if payload.delivery_day not in settings["delivery_days"]:
         raise CartError("Invalid delivery day.")
 
-    totals = price_order([l.model_dump() for l in payload.lines], dishes, settings, extras)
+    totals = price_order([l.model_dump() for l in payload.lines], dishes, settings, extras, sizes)
 
     order = client.table("orders").insert({
         "status": "pending_payment",
@@ -67,20 +68,30 @@ def create_checkout(payload: CheckoutPayload) -> str:
         # Frozen at order time so the admin's per-cycle view stays correct even
         # if the weekly schedule is changed later.
         "cook_date": cook_date_for(settings, now).isoformat(),
-        "subtotal": totals.subtotal_cents / 100, "fee": totals.fee_cents / 100,
-        "total": totals.total_cents / 100,
+        "subtotal": totals.subtotal_cents / 100, "discount": totals.discount_cents / 100,
+        "fee": totals.fee_cents / 100, "total": totals.total_cents / 100,
     }).execute().data[0]
 
     client.table("order_items").insert([{
         "order_id": order["id"], "kind": i.kind, "pack_size": i.pack_size,
-        "dish_name": i.dish_name, "qty": i.qty, "unit_price": i.unit_price_cents / 100,
+        "size_name": i.size_name, "dish_name": i.dish_name, "qty": i.qty, "unit_price": i.unit_price_cents / 100,
     } for i in totals.items]).execute()
 
     stripe.api_key = env("STRIPE_SECRET_KEY")
     site = env("SITE_URL")
     try:
+        # Stripe Checkout has no negative line items, so the grams discount
+        # goes in as a one-off coupon worth exactly what price_order computed.
+        discounts = []
+        if totals.discount_cents > 0:
+            coupon = stripe.Coupon.create(
+                amount_off=totals.discount_cents, currency="eur", duration="once",
+                name=f"{settings.get('discount_pct')}% guisos discount",
+            )
+            discounts = [{"coupon": coupon.id}]
         session = stripe.checkout.Session.create(
             mode="payment",
+            discounts=discounts,
             customer_email=payload.email,
             # €0 extras ("included") are kept on the order but not sent to
             # Stripe as line items.

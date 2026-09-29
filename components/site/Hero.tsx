@@ -17,9 +17,18 @@ export default function Hero({
   const windowLabel = windowOpen
     ? `Orders open until ${settings.close_day} ${String(settings.cutoff_time).slice(0, 5)}`
     : settings.closed_message || `Orders closed — back ${settings.open_day}`;
-  const feeLabel = `Order fee ${eur(settings.order_fee)}`;
-  const areaLabel = settings.delivery_area;
-  const maxPacksLabel = `${settings.max_packs} packs`;
+  // Facts line under the buttons, all from the admin's settings; a fact that
+  // is switched off (fee 0, no pack limit, discount 0) simply drops out.
+  const maxPacks = Number(settings.max_packs) || 0;
+  const discountPct = Number(settings.discount_pct) || 0;
+  const threshold = Number(settings.discount_threshold_grams) || 0;
+  const kg = threshold >= 1000 ? `${(threshold / 1000).toFixed(2).replace(/\.?0+$/, "")} kg` : `${threshold} g`;
+  const facts = [
+    Number(settings.order_fee) > 0 ? `Order fee ${eur(settings.order_fee)}` : "No order fee",
+    settings.delivery_area,
+    maxPacks > 0 ? `Max ${maxPacks} packs` : null,
+    discountPct > 0 ? `${discountPct}% off over ${kg}` : null,
+  ].filter((f): f is string => !!f);
   const heroImg = imageUrl(images.hero) ?? "/img/hero.jpg";
 
   return (
@@ -139,9 +148,9 @@ export default function Hero({
             color: "#a1806f",
           }}
         >
-          <span>{feeLabel}</span>
-          <span>{areaLabel}</span>
-          <span>Max {maxPacksLabel}</span>
+          {facts.map((f) => (
+            <span key={f}>{f}</span>
+          ))}
         </div>
       </div>
       <div className="sd-hero-img" style={{ position: "relative" }}>

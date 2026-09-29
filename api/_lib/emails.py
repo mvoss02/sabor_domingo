@@ -36,9 +36,37 @@ def _html_wrap(body: str) -> str:
 
 
 def _label(i: dict) -> str:
+    """"El Chico · Cochinita" for packs (older lines without a size name
+    fall back to grams), just the name for extras."""
     if i.get("kind", "pack") == "pack":
-        return f"{i['pack_size']}-meal pack · {i['dish_name']}"
+        size = i.get("size_name") or f"{i.get('pack_size')} g"
+        return f"{size} · {i['dish_name']}"
     return str(i["dish_name"])
+
+
+def _discount(order: dict) -> float:
+    return float(order.get("discount") or 0)
+
+
+def _totals_text(order: dict) -> str:
+    d = _discount(order)
+    line = f"Discount: −€{_eur(d)}\n" if d > 0 else ""
+    return f"{line}Total: €{_eur(order['total'])}"
+
+
+def _totals_html(order: dict) -> str:
+    d = _discount(order)
+    disc = (
+        f'<tr><td style="font-size:14px;color:#2e6b3e;">Discount</td>'
+        f'<td style="text-align:right;font-size:14px;color:#2e6b3e;">&minus;&euro;{_eur(d)}</td></tr>'
+        if d > 0 else ""
+    )
+    return (
+        f'<table style="width:100%;border-collapse:collapse;margin-top:10px;">{disc}<tr>'
+        f'<td style="font-weight:600;font-size:15px;color:#5e1d22;">Total</td>'
+        f'<td style="text-align:right;font-weight:700;font-size:20px;color:#c8492a;">&euro;{_eur(order["total"])}</td>'
+        f'</tr></table>'
+    )
 
 
 def _price(i: dict) -> str:
@@ -140,7 +168,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f"Hola {order['name']},\n\n"
             f"Your order {ref} is confirmed. {_schedule_sentence(order)}"
             f"\n\nYour pack:\n{_items_text(items)}\n\n"
-            f"Total: €{_eur(order['total'])}\n\n"
+            f"{_totals_text(order)}\n\n"
             "Everything arrives chilled and portioned with reheating notes — "
             "fridge for 4 days, freezer for a month.\n\n"
             "Un apapacho,\nMaca & Clau"
@@ -152,10 +180,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f'<p style="margin:0 0 18px;">Hola {_esc(order["name"])}, order <strong>{ref}</strong> is confirmed. '
             f'{_schedule_sentence(order, html=True)}</p>'
             f'{_items_html(items)}'
-            f'<table style="width:100%;border-collapse:collapse;margin-top:10px;"><tr>'
-            f'<td style="font-weight:600;font-size:15px;color:#5e1d22;">Total</td>'
-            f'<td style="text-align:right;font-weight:700;font-size:20px;color:#c8492a;">&euro;{_eur(order["total"])}</td>'
-            f'</tr></table>'
+            f'{_totals_html(order)}'
             f'<p style="margin:18px 0 0;font-size:13.5px;color:#6a4a3f;">Everything arrives chilled and portioned '
             f'with reheating notes &mdash; fridge for 4 days, freezer for a month.</p>'
             f'<p style="margin:14px 0 0;font-family:Georgia,serif;font-size:17px;color:#c8492a;">Un apapacho,<br>Maca &amp; Clau</p>'
@@ -169,7 +194,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f"{order['address']}, {order.get('postal_code', '')}\n"
             f"Phone: {order.get('phone') or '—'}\n"
             f"Delivery: {order['delivery_day']}\nNotes: {order['notes'] or '—'}\n\n"
-            f"{_items_text(items)}\n\nTotal: €{_eur(order['total'])}"
+            f"{_items_text(items)}\n\n{_totals_text(order)}"
         ),
         to=_admins(),
         html=_html_wrap(
@@ -180,7 +205,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f'Delivery: <strong>{_esc(order["delivery_day"])}</strong><br>'
             f'Notes: {_esc(order["notes"] or "—")}</p>'
             f'{_items_html(items)}'
-            f'<p style="margin:12px 0 0;font-weight:700;color:#c8492a;font-size:17px;">Total &euro;{_eur(order["total"])}</p>'
+            f'{_totals_html(order)}'
         ),
     )
 

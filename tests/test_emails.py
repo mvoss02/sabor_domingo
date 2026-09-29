@@ -7,7 +7,7 @@ from api._lib import emails
 ORDER = {"id": "o1", "ref_num": 241, "name": "Ana", "email": "ana@example.com",
          "address": "Javastraat 44", "delivery_day": "Monday",
          "subtotal": 85.0, "fee": 4.0, "total": 89.5, "notes": ""}
-ITEMS = [{"pack_size": 10, "dish_name": "Cochinita", "qty": 1, "unit_price": 85.0}]
+ITEMS = [{"pack_size": 750, "size_name": "El Grande", "dish_name": "Cochinita", "qty": 1, "unit_price": 85.0}]
 
 
 def test_sends_customer_and_admin_email(monkeypatch):
@@ -122,8 +122,27 @@ def test_items_text_handles_extras_and_included():
     items = ITEMS + [{"kind": "extra", "pack_size": None, "dish_name": "Salsa roja", "qty": 2, "unit_price": 2.5},
                      {"kind": "extra", "pack_size": None, "dish_name": "Tortillas · maiz", "qty": 1, "unit_price": 0}]
     text = emails._items_text(items)
-    assert "1× 10-meal pack · Cochinita — €85.00" in text
+    assert "1× El Grande · Cochinita — €85.00" in text
     assert "2× Salsa roja — €2.50" in text
     assert "1× Tortillas · maiz — included" in text
     html = emails._items_html(items)
     assert "Salsa roja" in html and "included" in html and "&euro;2.50" in html
+
+
+def test_legacy_line_without_size_name_shows_grams():
+    assert emails._label({"pack_size": 4, "dish_name": "Old"}) == "4 g · Old"
+    assert emails._label({"pack_size": 10, "size_name": "10-meal pack", "dish_name": "Old"}) == "10-meal pack · Old"
+
+
+def test_discount_line_only_when_granted(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
+    with patch.object(emails, "_send") as send:
+        emails.send_order_emails(ORDER, ITEMS)
+        assert "Discount" not in send.call_args_list[0].kwargs["text"]
+        emails.send_order_emails({**ORDER, "discount": 2.66, "total": 86.84}, ITEMS)
+        text = send.call_args_list[2].kwargs["text"]
+        html = send.call_args_list[2].kwargs["html"]
+    assert "Discount: −€2.66" in text and "Total: €86.84" in text
+    assert "&minus;&euro;2.66" in html

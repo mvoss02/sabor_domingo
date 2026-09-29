@@ -1,15 +1,21 @@
 import { supabase } from "@/lib/supabase";
-import type { Dish, Extra, FaqEntry, HeroContent, ImageSlots, Settings } from "@/lib/types";
+import type { Dish, Extra, FaqEntry, HeroContent, ImageSlots, PackSize, Settings } from "@/lib/types";
 
 export async function getSiteData() {
-  const [dishes, extras, settings, content] = await Promise.all([
+  const [dishes, extras, sizes, settings, content] = await Promise.all([
     supabase.from("dishes").select("*").order("sort_order"),
     supabase.from("extras").select("*").order("sort_order"),
+    supabase.from("pack_sizes").select("*").order("sort_order"),
     supabase.from("settings").select("*").eq("id", 1).single(),
     supabase.from("site_content").select("*"),
   ]);
   if (dishes.error) {
     throw new Error(`getSiteData: dishes fetch failed: ${dishes.error.message}`);
+  }
+  if (sizes.error) {
+    // No sizes means no prices: better a loud failure than a menu that
+    // cannot be ordered from (migration 0013 not applied yet?).
+    throw new Error(`getSiteData: pack_sizes fetch failed: ${sizes.error.message}`);
   }
   if (extras.error) {
     // Sides are optional for the page; don't take the whole site down over
@@ -31,6 +37,7 @@ export async function getSiteData() {
   return {
     dishes: (dishes.data ?? []) as Dish[],
     extras: (extras.data ?? []) as Extra[],
+    sizes: (sizes.data ?? []) as PackSize[],
     settings: settings.data as Settings,
     hero: byKey["hero"] as HeroContent,
     faq: (byKey["faq"] ?? []) as FaqEntry[],

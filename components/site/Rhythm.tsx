@@ -9,7 +9,7 @@ const RHYTHM_VIEW: "phases" | "days" = "phases";
 
 const OPEN_NOTES = [
   "Menu is live. Early orders get first choice.",
-  "Plan the week. The 10-meal pack is popular now.",
+  "Plan the week. El Grande is popular now.",
   "We start counting kilos and calling suppliers.",
 ];
 
@@ -98,7 +98,7 @@ function buildPhases(settings: Settings) {
       num: "01",
       short: `${s(settings.open_day)} → ${s(settings.close_day)}`,
       title: `You order ${settings.open_day} → ${settings.close_day}`,
-      note: `Pick a 4-meal or 10-meal pack, choose your dishes and sides, pay by card. The list closes ${settings.close_day} at ${cutoff} and opens again ${settings.open_day} morning.`,
+      note: `Pick your guisos in El Chico or El Grande, add sides, pay by card. The list closes ${settings.close_day} at ${cutoff} and opens again ${settings.open_day} morning.`,
       bg: "#ece0cb",
       fg: "#3d1f18",
       accent: "#c8492a",
@@ -264,7 +264,7 @@ export default function Rhythm({ settings }: { settings: Settings }) {
               You order {settings.open_day} → {settings.close_day}
             </h3>
             <p style={{ fontSize: 14.5, lineHeight: 1.65, color: "#e0cdb8", margin: 0 }}>
-              Pick a 4-meal or 10-meal pack, choose your dishes, pay by card. The list closes{" "}
+              Pick your guisos in El Chico or El Grande, add sides, pay by card. The list closes{" "}
               {settings.close_day} at {String(settings.cutoff_time).slice(0, 5)} and opens again{" "}
               {settings.open_day} morning.
             </p>

@@ -80,7 +80,7 @@ export default function Footer() {
               Terms &amp; conditions
             </a>
           </span>
-          <span>Sabor Domingo · Amsterdam · KvK [KVK NUMBER] · BTW [BTW NUMBER]</span>
+          <span>Sabor Domingo · Amsterdam · KvK 42138905 · BTW NL005527552B10</span>
         </div>
       </div>
     </footer>

@@ -24,8 +24,14 @@ function matchesStatus(o: Order, f: StatusFilter): boolean {
 const muted: React.CSSProperties = { color: "#a1806f", fontSize: 12.5 };
 const h2: React.CSSProperties = { fontWeight: 600, fontSize: 15, margin: "0 0 8px", color: "#c8492a" };
 
-function meals(o: Order): number {
+/** Grams of guisos in an order (pack_size holds grams since migration 0013). */
+function grams(o: Order): number {
   return o.order_items.filter((i) => i.kind !== "extra").reduce((n, i) => n + i.qty * (i.pack_size ?? 0), 0);
+}
+
+/** "750 g", "1.2 kg", "12 kg" */
+function kg(g: number): string {
+  return g < 1000 ? `${g} g` : `${(g / 1000).toFixed(2).replace(/\.?0+$/, "")} kg`;
 }
 
 /** Last delivery date of a cycle, given the configured delivery weekdays. */
@@ -124,7 +130,7 @@ export default function OrdersTab() {
     (o) => matchesStatus(o, statusFilter) && (dayFilter === "all" || deliveryDate(o.cook_date, o.delivery_day) === dayFilter)
   );
 
-  // What to cook: meals per dish across PAID orders in view (respecting day
+  // What to cook: grams per dish across PAID orders in view (respecting day
   // filter); extras (sides) are counted separately by unit.
   const { cookSummary, extrasSummary } = useMemo(() => {
     const byDish: Record<string, number> = {};
@@ -144,17 +150,17 @@ export default function OrdersTab() {
 
   // Deliveries per date across PAID orders in view.
   const deliverySummary = useMemo(() => {
-    const byDate: Record<string, { orders: number; meals: number }> = {};
+    const byDate: Record<string, { orders: number; grams: number }> = {};
     paidInView.forEach((o) => {
       const d = deliveryDate(o.cook_date, o.delivery_day);
-      byDate[d] = byDate[d] ?? { orders: 0, meals: 0 };
+      byDate[d] = byDate[d] ?? { orders: 0, grams: 0 };
       byDate[d].orders += 1;
-      byDate[d].meals += meals(o);
+      byDate[d].grams += grams(o);
     });
     return Object.entries(byDate).sort();
   }, [paidInView]);
 
-  const totalMeals = paidInView.reduce((n, o) => n + meals(o), 0);
+  const totalGrams = paidInView.reduce((n, o) => n + grams(o), 0);
   // Net of partial refunds: what the kitchen actually keeps for this view.
   const revenue = paidInView.reduce((n, o) => n + Number(o.total) - Number(o.refunded_total ?? 0), 0);
 
@@ -258,7 +264,7 @@ export default function OrdersTab() {
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 22px", fontSize: 14, color: "#5e1d22", marginBottom: 12 }}>
           <span><strong>{paidInView.length}</strong> paid orders</span>
-          <span><strong>{totalMeals}</strong> meals</span>
+          <span><strong>{kg(totalGrams)}</strong> of guisos</span>
           <span><strong>{eur(revenue)}</strong> paid</span>
         </div>
 
@@ -268,7 +274,7 @@ export default function OrdersTab() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginBottom: 12 }}>
               {cookSummary.map(([dish, n]) => (
                 <span key={dish} style={{ fontSize: 14, color: "#5e1d22" }}>
-                  <strong>{n}</strong> meals · {dish}
+                  <strong>{kg(n)}</strong> · {dish}
                 </span>
               ))}
             </div>
@@ -294,7 +300,7 @@ export default function OrdersTab() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
               {deliverySummary.map(([d, s]) => (
                 <span key={d} style={{ fontSize: 14, color: "#5e1d22" }}>
-                  <strong>{fmtDate(d)}</strong> · {s.orders} orders · {s.meals} meals
+                  <strong>{fmtDate(d)}</strong> · {s.orders} orders · {kg(s.grams)}
                 </span>
               ))}
             </div>

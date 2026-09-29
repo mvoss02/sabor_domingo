@@ -3,9 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { imageUrl } from "@/lib/content";
 import { eur, isWindowOpen } from "@/lib/window";
 import { suggestEmail } from "@/lib/emailSuggest";
-import type { Dish, Extra, Settings } from "@/lib/types";
+import { CATEGORY_LABEL, DISH_CATEGORIES, freeUnits, priceFor } from "@/lib/types";
+import type { Dish, DishTag, Extra, PackSize, Settings } from "@/lib/types";
 
-const unitPrice = (x: Extra) => (x.included ? 0 : Number(x.price));
+const round2 = (n: number) => Math.round(n * 100) / 100;
+/** "750 g", "1.2 kg", "2 kg" */
+const weight = (g: number) => (g < 1000 ? `${g} g` : `${(g / 1000).toFixed(2).replace(/\.?0+$/, "")} kg`);
+const PLANT: DishTag[] = ["Veggie", "Vegan"];
 
 const fieldStyle: React.CSSProperties = {
   width: "100%",
@@ -27,8 +31,18 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
-export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish[]; extras: Extra[]; settings: Settings }) {
-  const [packSize, setPackSize] = useState<4 | 10>(10);
+export default function PackBuilder({
+  dishes,
+  extras,
+  sizes,
+  settings,
+}: {
+  dishes: Dish[];
+  extras: Extra[];
+  sizes: PackSize[];
+  settings: Settings;
+}) {
+  // cart keys are `${dishId}|${sizeId}`: one line per guiso and size
   const [cart, setCart] = useState<Record<string, number>>({});
   // extras are keyed by extra id; they only ship alongside at least one pack
   const [extrasCart, setExtrasCart] = useState<Record<string, number>>({});
@@ -47,31 +61,48 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
   const [error, setError] = useState<string | null>(null);
 
   const windowOpen = isWindowOpen(settings);
-  const priceOf = (size: number) => (size === 4 ? settings.price_4 : settings.price_10);
-  // cart keys are `${dishId}|${packSize}` so 4- and 10-meal packs mix freely
+  const dishById = useMemo(() => new Map(dishes.map((d) => [d.id, d])), [dishes]);
+  const sizeById = useMemo(() => new Map(sizes.map((s) => [s.id, s])), [sizes]);
+  const priceOf = (dish: Dish, size: PackSize) => priceFor(size, dish.category ?? "classic");
   const totalPacks = useMemo(() => Object.values(cart).reduce((a, b) => a + b, 0), [cart]);
-  const packsSubtotal = useMemo(
-    () =>
-      Object.entries(cart).reduce((sum, [key, qty]) => {
-        const size = Number(key.split("|")[1]);
-        return sum + qty * priceOf(size);
-      }, 0),
-    [cart, settings.price_4, settings.price_10] // eslint-disable-line react-hooks/exhaustive-deps
-  ); // display only; server recomputes
+  // display only; the server recomputes price, grams and discount from the same rows
+  const { packsSubtotal, totalGrams } = useMemo(() => {
+    let money = 0;
+    let grams = 0;
+    for (const [key, qty] of Object.entries(cart)) {
+      const [dishId, sizeId] = key.split("|");
+      const dish = dishById.get(dishId);
+      const size = sizeById.get(sizeId);
+      if (!dish || !size) continue;
+      money += qty * priceFor(size, dish.category ?? "classic");
+      grams += qty * Number(size.grams);
+    }
+    return { packsSubtotal: money, totalGrams: grams };
+  }, [cart, dishById, sizeById]);
+  // paid side units = qty minus the free ones the packs earn (free_per_pack × packs)
+  const extraCost = (x: Extra, qty: number) => (qty - freeUnits(x, qty, totalPacks)) * Number(x.price);
   const extrasSubtotal = useMemo(
     () =>
       Object.entries(extrasCart).reduce((sum, [id, qty]) => {
         const x = extras.find((e) => e.id === id);
-        return sum + qty * (x ? unitPrice(x) : 0);
+        return sum + (x ? (qty - freeUnits(x, qty, totalPacks)) * Number(x.price) : 0);
       }, 0),
-    [extrasCart, extras]
+    [extrasCart, extras, totalPacks]
   );
   const totalExtras = useMemo(() => Object.values(extrasCart).reduce((a, b) => a + b, 0), [extrasCart]);
-  const maxExtras = settings.max_extras ?? 10;
-  const extrasLeft = maxExtras - totalExtras;
+  // a cap of 0 means no limit per order (mirrors the server)
+  const maxPacks = Number(settings.max_packs) || 0;
+  const maxExtras = settings.max_extras == null ? 10 : Number(settings.max_extras);
+  const extrasLeft = maxExtras > 0 ? maxExtras - totalExtras : Infinity;
   const subtotal = packsSubtotal + extrasSubtotal;
-  const total = totalPacks > 0 ? subtotal + settings.order_fee : 0;
-  const packsLeft = settings.max_packs - totalPacks;
+  // grams discount: guisos only, strictly above the threshold; mirrors api/_lib/pricing.py
+  const discountPct = Number(settings.discount_pct ?? 0);
+  const discountThreshold = Number(settings.discount_threshold_grams ?? 0);
+  const discountOn = discountPct > 0;
+  const discountEarned = discountOn && totalGrams > discountThreshold;
+  const discount = discountEarned ? round2((packsSubtotal * discountPct) / 100) : 0;
+  const total = totalPacks > 0 ? subtotal - discount + settings.order_fee : 0;
+  const packsLeft = maxPacks > 0 ? maxPacks - totalPacks : Infinity;
   const postalOk = /^\d{4}\s?[A-Za-z]{2}$/.test(form.postal_code.trim());
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim());
   // must start like a real dialable number: +31…, 0031…, or domestic 06…/020…
@@ -115,11 +146,11 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
     };
   }, [form.postal_code, houseNr, postalOk]);
 
-  function add(dishId: string, delta: number) {
-    const key = `${dishId}|${packSize}`;
+  function add(dishId: string, sizeId: string, delta: number) {
+    const key = `${dishId}|${sizeId}`;
     setCart((c) => {
       const current = c[key] ?? 0;
-      if (delta > 0 && totalPacks >= settings.max_packs) return c;
+      if (delta > 0 && maxPacks > 0 && totalPacks >= maxPacks) return c;
       const next = Math.max(0, current + delta);
       const copy = { ...c, [key]: next };
       if (next === 0) delete copy[key];
@@ -127,13 +158,9 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
     });
   }
 
-  function switchSize(size: 4 | 10) {
-    setPackSize(size);
-  }
-
   function addExtra(x: Extra, delta: number) {
     setExtrasCart((c) => {
-      if (delta > 0 && totalExtras >= maxExtras) return c;
+      if (delta > 0 && maxExtras > 0 && totalExtras >= maxExtras) return c;
       const next = Math.min(x.max_qty ?? 5, Math.max(0, (c[x.id] ?? 0) + delta));
       const copy = { ...c, [x.id]: next };
       if (next === 0) delete copy[x.id];
@@ -145,8 +172,8 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
     setSubmitting(true);
     setError(null);
     const lines: object[] = Object.entries(cart).map(([key, qty]) => {
-      const [dish_id, size] = key.split("|");
-      return { dish_id, pack_size: Number(size), qty };
+      const [dish_id, size_id] = key.split("|");
+      return { dish_id, size_id, qty };
     });
     for (const [extra_id, qty] of Object.entries(extrasCart)) lines.push({ extra_id, qty });
     try {
@@ -168,39 +195,35 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
     setSubmitting(false);
   }
 
-  const packs = [
-    {
-      size: 4 as const,
-      title: "4-meal pack",
-      price: settings.price_4,
-      note: "A taster week — four portions of one dish.",
-    },
-    {
-      size: 10 as const,
-      title: "10-meal pack",
-      price: settings.price_10,
-      note: "The full week — ten portions, best value.",
-    },
-  ];
-
   type SummaryLine = { key: string; qty: number; label: string; amount: number };
   const cartLines: SummaryLine[] = [
     ...(Object.entries(cart)
       .map(([key, qty]) => {
-        const [dishId, sizeStr] = key.split("|");
-        const dish = dishes.find((d) => d.id === dishId);
-        const size = Number(sizeStr);
-        return dish ? { key, qty, label: `${size}-meal · ${dish.name}`, amount: qty * priceOf(size) } : null;
+        const [dishId, sizeId] = key.split("|");
+        const dish = dishById.get(dishId);
+        const size = sizeById.get(sizeId);
+        return dish && size
+          ? { key, qty, label: `${size.name} · ${dish.name}`, amount: qty * priceOf(dish, size) }
+          : null;
       })
       .filter(Boolean) as SummaryLine[]),
     ...(Object.entries(extrasCart)
       .map(([id, qty]) => {
         const x = extras.find((e) => e.id === id);
-        return x ? { key: `x|${id}`, qty, label: x.name, amount: qty * unitPrice(x) } : null;
+        if (!x) return null;
+        const free = freeUnits(x, qty, totalPacks);
+        const label = free > 0 && free < qty ? `${x.name} (${free} included)` : x.name;
+        return { key: `x|${id}`, qty, label, amount: extraCost(x, qty) };
       })
       .filter(Boolean) as SummaryLine[]),
   ];
   const extrasAvailableCount = extras.length;
+  // The Classics first, then Chef's Favourites; empty groups disappear.
+  const groups = DISH_CATEGORIES.map((category) => ({
+    category,
+    dishes: dishes.filter((d) => (d.category ?? "classic") === category),
+  })).filter((g) => g.dishes.length > 0);
+  const [smallSize, largeSize] = sizes;
 
   return (
     <section
@@ -261,64 +284,16 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
             Build your meal pack
           </h2>
           <p style={{ fontSize: 15.5, color: "#6a4a3f", maxWidth: "56ch", margin: "0 0 30px", lineHeight: 1.65 }}>
-            Two pack sizes, three dishes each week. Mix and match up to {settings.max_packs} packs —
-            one pack feeds one person for the week, or a couple for a few dinners.
+            Every guiso comes in two sizes
+            {smallSize && largeSize && (
+              <>
+                : <strong>{smallSize.name}</strong> ({weight(smallSize.grams)}
+                {smallSize.serves && `, ${smallSize.serves}`}) and <strong>{largeSize.name}</strong> ({weight(largeSize.grams)}
+                {largeSize.serves && `, ${largeSize.serves}`})
+              </>
+            )}
+            . Mix and match{maxPacks > 0 ? ` up to ${maxPacks} packs` : " as many as you like"}; sides ride along.
           </p>
-          <h3
-            style={{
-              fontWeight: 600,
-              fontSize: 13,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: "#a1806f",
-              margin: "0 0 12px",
-            }}
-          >
-            1 · Choose your pack size
-          </h3>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 34 }}>
-            {packs.map((p) => {
-              const selected = packSize === p.size;
-              return (
-                <button
-                  key={p.size}
-                  type="button"
-                  onClick={() => switchSize(p.size)}
-                  style={{
-                    flex: "1 1 220px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    borderRadius: 14,
-                    padding: 20,
-                    fontFamily: "inherit",
-                    background: selected ? "#5e1d22" : "#fdf6e8",
-                    color: selected ? "#fdf6e8" : "#5e1d22",
-                    border: selected ? "2px solid #5e1d22" : "2px solid #ecd9c0",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-                    <span style={{ fontWeight: 700, fontSize: 21, lineHeight: 1, letterSpacing: "-0.02em" }}>
-                      {p.title}
-                    </span>
-                    <span style={{ fontWeight: 700, fontSize: 21, lineHeight: 1 }}>{eur(p.price)}</span>
-                  </div>
-                  <div style={{ fontSize: 13.5, lineHeight: 1.55, marginTop: 8, opacity: 0.85 }}>{p.note}</div>
-                  <div
-                    style={{
-                      fontSize: 11.5,
-                      fontWeight: 600,
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      marginTop: 12,
-                      opacity: 0.8,
-                    }}
-                  >
-                    {eur(p.price / p.size)} per meal
-                  </div>
-                </button>
-              );
-            })}
-          </div>
 
           <div
             style={{
@@ -340,151 +315,160 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
                 margin: 0,
               }}
             >
-              2 · Choose your dishes
+              1 · Choose your guisos
             </h3>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: "#c8492a" }}>
-              {packsLeft > 0 ? `${packsLeft} of ${settings.max_packs} packs left` : "Pack limit reached"}
-            </span>
+            {maxPacks > 0 && (
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: "#c8492a" }}>
+                {packsLeft > 0 ? `${packsLeft} of ${maxPacks} packs left` : "Pack limit reached"}
+              </span>
+            )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {dishes
-              .map((d) => {
-                const qty = cart[`${d.id}|${packSize}`] ?? 0;
-                const img = imageUrl(d.image_path);
-                const isMeat = d.tag === "Meat";
-                const soldOut = !d.available;
-                return (
-                  <div
-                    key={d.id}
-                    aria-disabled={soldOut}
-                    style={{
-                      background: "#fdf6e8",
-                      borderRadius: 14,
-                      padding: 16,
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 14,
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      opacity: soldOut ? 0.5 : 1,
-                      filter: soldOut ? "grayscale(1)" : "none",
-                    }}
-                  >
-                    <div style={{ width: 80, height: 80, flex: "0 0 auto" }}>
-                      {img ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={img}
-                          alt={d.name}
-                          style={{ width: 80, height: 80, borderRadius: 10, objectFit: "cover", display: "block" }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: 10,
-                            background: "repeating-linear-gradient(135deg, #ece0cb 0 8px, #f6eee0 8px 16px)",
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div style={{ flex: "1 1 190px", minWidth: 0 }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                        <span
-                          style={{
-                            fontWeight: 700,
-                            fontSize: 18,
-                            color: "#5e1d22",
-                            lineHeight: 1.2,
-                            letterSpacing: "-0.015em",
-                          }}
-                        >
-                          {d.name}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 10.5,
-                            fontWeight: 600,
-                            letterSpacing: "0.1em",
-                            textTransform: "uppercase",
-                            background: isMeat ? "#c8492a" : "#2e6b3e",
-                            color: "#fdf6e8",
-                            borderRadius: 999,
-                            padding: "3px 9px",
-                          }}
-                        >
-                          {d.tag}
-                        </span>
-                        {soldOut && <SoldOutBadge />}
-                      </div>
-                      <p style={{ fontSize: 13.5, lineHeight: 1.55, color: "#6a4a3f", margin: "6px 0 0" }}>
-                        {d.description}
-                      </p>
-                    </div>
+          {groups.map((g) => (
+            <div key={g.category} style={{ marginBottom: 26 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: "4px 14px",
+                  margin: "0 0 10px",
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'Caveat Brush', cursive",
+                    fontSize: "clamp(22px, 2.6vw, 27px)",
+                    color: g.category === "chef" ? "#c8492a" : "#5e1d22",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {CATEGORY_LABEL[g.category]}
+                </span>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#a1806f" }}>
+                  {sizes.map((s, i) => (
+                    <span key={s.id}>
+                      {i > 0 && " · "}
+                      {s.name} {eur(priceFor(s, g.category))}
+                    </span>
+                  ))}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 290px), 1fr))",
+                  gap: 14,
+                }}
+              >
+                {g.dishes.map((d) => {
+                  const img = imageUrl(d.image_path);
+                  const soldOut = !d.available;
+                  const chef = g.category === "chef";
+                  return (
                     <div
-                      className="sd-stepper"
+                      key={d.id}
+                      aria-disabled={soldOut}
                       style={{
+                        background: "#fdf6e8",
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        border: chef ? "1.5px solid #e8c9b0" : "1.5px solid transparent",
+                        opacity: soldOut ? 0.5 : 1,
+                        filter: soldOut ? "grayscale(1)" : "none",
                         display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        borderRadius: 999,
-                        padding: 4,
-                        background: "#f6eee0",
-                        flex: "0 0 auto",
+                        flexDirection: "column",
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => add(d.id, -1)}
-                        disabled={soldOut}
-                        aria-label="Remove one pack"
-                        className="sd-qty-dec"
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: "50%",
-                          border: "none",
-                          background: "transparent",
-                          fontSize: 22,
-                          fontWeight: 500,
-                          cursor: "pointer",
-                          color: "#5e1d22",
-                          lineHeight: 1,
-                        }}
-                      >
-                        –
-                      </button>
-                      <span className="sd-qty-count" style={{ minWidth: 26, textAlign: "center", fontWeight: 700, fontSize: 17, color: "#5e1d22" }}>
-                        {qty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => add(d.id, 1)}
-                        disabled={soldOut}
-                        aria-label="Add one pack"
-                        className="sd-qty-inc"
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: "50%",
-                          border: "none",
-                          background: "#c8492a",
-                          color: "#fdf6e8",
-                          fontSize: 22,
-                          fontWeight: 500,
-                          cursor: "pointer",
-                          lineHeight: 1,
-                          opacity: packsLeft <= 0 ? 0.4 : 1,
-                        }}
-                      >
-                        +
-                      </button>
+                      {/* White box, whole photo: the dish shots come on a white background. */}
+                      <div style={{ position: "relative", aspectRatio: "4 / 3", background: "#fff", overflow: "hidden" }}>
+                        {img ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={img}
+                            alt={d.name}
+                            loading="lazy"
+                            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              background: "repeating-linear-gradient(135deg, #ece0cb 0 8px, #f6eee0 8px 16px)",
+                            }}
+                          />
+                        )}
+                        {chef && (
+                          <span style={{ position: "absolute", top: 12, left: 12 }}>
+                            <Pill bg="#c8492a">Chef&rsquo;s favourite</Pill>
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", gap: 10, flex: "1 1 auto" }}>
+                        <div>
+                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontWeight: 700, fontSize: 19, color: "#5e1d22", lineHeight: 1.2, letterSpacing: "-0.015em" }}>
+                              {d.name}
+                            </span>
+                            <Pill bg={PLANT.includes(d.tag) ? "#2e6b3e" : "#8a5a3c"}>{d.tag}</Pill>
+                            {soldOut && <SoldOutBadge />}
+                          </div>
+                          {d.description && (
+                            <p style={{ fontSize: 13.5, lineHeight: 1.55, color: "#6a4a3f", margin: "6px 0 0" }}>{d.description}</p>
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: `repeat(${Math.max(1, Math.min(sizes.length, 2))}, minmax(0, 1fr))`,
+                            gap: 8,
+                            marginTop: "auto",
+                          }}
+                        >
+                          {sizes.map((s) => {
+                            const qty = cart[`${d.id}|${s.id}`] ?? 0;
+                            return (
+                              <div
+                                key={s.id}
+                                style={{
+                                  border: qty > 0 ? "2px solid #c8492a" : "2px solid #ecd9c0",
+                                  borderRadius: 12,
+                                  padding: "10px 10px 8px",
+                                  textAlign: "center",
+                                  background: qty > 0 ? "#fff8ec" : "transparent",
+                                }}
+                              >
+                                <div style={{ fontWeight: 700, fontSize: 15, color: "#5e1d22", letterSpacing: "-0.01em" }}>{s.name}</div>
+                                <div style={{ fontSize: 12, color: "#a1806f", marginTop: 2 }}>
+                                  {weight(s.grams)}
+                                  {s.serves && ` · ${s.serves}`}
+                                </div>
+                                <div style={{ fontWeight: 700, fontSize: 18, color: "#c8492a", margin: "6px 0 8px" }}>{eur(priceOf(d, s))}</div>
+                                <Stepper
+                                  qty={qty}
+                                  onDec={() => add(d.id, s.id, -1)}
+                                  onInc={() => add(d.id, s.id, 1)}
+                                  disabled={soldOut}
+                                  incDimmed={packsLeft <= 0}
+                                  label={`${s.name} ${d.name}`}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-          </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {discountOn && settings.discount_hint && (
+            <p style={{ fontSize: 13, color: discountEarned ? "#2e6b3e" : "#a1806f", fontWeight: 600, margin: "-8px 0 0" }}>
+              {discountEarned ? `${discountPct}% off applied · ${weight(totalGrams)} of guisos` : settings.discount_hint}
+            </p>
+          )}
 
           {extrasAvailableCount > 0 && (
             <>
@@ -508,18 +492,40 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
                     margin: 0,
                   }}
                 >
-                  3 · Choose your sides
+                  2 · Choose your sides
                 </h3>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#c8492a" }}>
-                  {extrasLeft > 0 ? `${extrasLeft} of ${maxExtras} sides left` : "Sides limit reached"}
-                </span>
+                {maxExtras > 0 && (
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#c8492a" }}>
+                    {extrasLeft > 0 ? `${extrasLeft} of ${maxExtras} sides left` : "Sides limit reached"}
+                  </span>
+                )}
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 150px), 1fr))",
+                  gap: 10,
+                }}
+              >
                 {extras.map((x) => {
                   const qty = extrasCart[x.id] ?? 0;
                   const img = imageUrl(x.image_path);
                   const soldOut = !x.available;
-                  const free = unitPrice(x) === 0;
+                  const perPack = Number(x.free_per_pack ?? 0);
+                  const perOrder = Number(x.free_per_order ?? 0);
+                  const maxFree = Number(x.max_free ?? 0);
+                  const price = Number(x.price);
+                  // "included" · "2 per order included, then €3 each" ·
+                  // "1 per pack included (max 3), then €2 each" · "€2 each"
+                  const free = price === 0 || (qty > 0 && freeUnits(x, qty, totalPacks) === qty);
+                  const priceText =
+                    price === 0
+                      ? "included"
+                      : perOrder > 0
+                        ? `${perOrder} per order included, then ${eur(price)} each`
+                        : perPack > 0
+                          ? `${perPack} per pack included${maxFree > 0 ? ` (max ${maxFree})` : ""}, then ${eur(price)} each`
+                          : `${eur(price)} each`;
                   const atCap = qty >= (x.max_qty ?? 5) || extrasLeft <= 0;
                   return (
                     <div
@@ -528,62 +534,47 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
                       style={{
                         background: "#fdf6e8",
                         borderRadius: 14,
-                        padding: "10px 12px 10px 10px",
+                        padding: "14px 12px 12px",
                         display: "flex",
-                        gap: 12,
+                        flexDirection: "column",
                         alignItems: "center",
+                        textAlign: "center",
+                        gap: 4,
+                        border: qty > 0 ? "2px solid #c8492a" : "2px solid transparent",
                         opacity: soldOut ? 0.5 : 1,
                         filter: soldOut ? "grayscale(1)" : "none",
                       }}
                     >
-                      <div style={{ width: 56, height: 56, flex: "0 0 auto" }}>
-                        {img ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={img} alt={x.name} style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover", display: "block" }} />
-                        ) : (
-                          <div style={{ width: 56, height: 56, borderRadius: 10, background: "repeating-linear-gradient(135deg, #ece0cb 0 8px, #f6eee0 8px 16px)" }} />
-                        )}
-                      </div>
-                      <div style={{ flex: "1 1 120px", minWidth: 0 }}>
-                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontWeight: 700, fontSize: 15.5, color: "#5e1d22", lineHeight: 1.2 }}>{x.name}</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: free ? "#2e6b3e" : "#c8492a" }}>
-                            {free ? "included" : eur(Number(x.price))}
-                          </span>
-                          {soldOut && <SoldOutBadge />}
-                        </div>
-                        {x.description && (
-                          <p style={{ fontSize: 12.5, lineHeight: 1.45, color: "#6a4a3f", margin: "3px 0 0" }}>{x.description}</p>
-                        )}
-                      </div>
-                      <div
-                        className="sd-stepper"
-                        style={{ display: "flex", alignItems: "center", gap: 2, borderRadius: 999, padding: 3, background: "#f6eee0", flex: "0 0 auto" }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => addExtra(x, -1)}
-                          disabled={soldOut || qty === 0}
-                          aria-label={`One less ${x.name}`}
-                          className="sd-qty-dec"
-                          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "transparent", fontSize: 20, cursor: "pointer", color: "#5e1d22", lineHeight: 1 }}
-                        >
-                          –
-                        </button>
-                        <span className="sd-qty-count" style={{ minWidth: 22, textAlign: "center", fontWeight: 700, fontSize: 15, color: "#5e1d22" }}>
-                          {qty}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => addExtra(x, 1)}
-                          disabled={soldOut || atCap}
-                          aria-label={`One more ${x.name}`}
-                          className="sd-qty-inc"
-                          style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "#c8492a", color: "#fdf6e8", fontSize: 20, cursor: "pointer", lineHeight: 1, opacity: atCap ? 0.4 : 1 }}
-                        >
-                          +
-                        </button>
-                      </div>
+                      {img && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={img}
+                          alt={x.name}
+                          loading="lazy"
+                          style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", display: "block", marginBottom: 4 }}
+                        />
+                      )}
+                      <span style={{ fontWeight: 700, fontSize: 15, color: "#5e1d22", lineHeight: 1.25 }}>{x.name}</span>
+                      {x.description && (
+                        <span style={{ fontSize: 12, lineHeight: 1.4, color: "#a1806f" }}>{x.description}</span>
+                      )}
+                      <span style={{ fontSize: price === 0 || (perPack === 0 && perOrder === 0) ? 15 : 12.5, fontWeight: 700, lineHeight: 1.35, color: free ? "#2e6b3e" : "#c8492a", margin: "2px 0 6px" }}>
+                        {priceText}
+                      </span>
+                      {soldOut ? (
+                        <SoldOutBadge />
+                      ) : (
+                        <Stepper
+                          qty={qty}
+                          onDec={() => addExtra(x, -1)}
+                          onInc={() => addExtra(x, 1)}
+                          disabled={false}
+                          decDisabled={qty === 0}
+                          incDisabled={atCap}
+                          incDimmed={atCap}
+                          label={x.name}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -626,8 +617,10 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
 
           {cartLines.length === 0 ? (
             <p style={{ fontSize: 14, color: "#e0cdb8", lineHeight: 1.6, margin: "0 0 18px" }}>
-              Nothing yet. Most people start with one 10-meal pack, or two 4-meal packs to try both
-              meats.
+              Nothing yet.{" "}
+              {smallSize && largeSize
+                ? `Most people start with one ${largeSize.name}, or two ${smallSize.name} to try two guisos.`
+                : "Pick a guiso to get started."}
             </p>
           ) : (
             <div>
@@ -654,9 +647,15 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
                 ))}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, color: "#e0cdb8", marginBottom: 6 }}>
-                <span>Subtotal</span>
+                <span>Subtotal · {weight(totalGrams)} of guisos</span>
                 <span>{eur(subtotal)}</span>
               </div>
+              {discount > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, color: "#7fae86", fontWeight: 600, marginBottom: 6 }}>
+                  <span>{discountPct}% off over {weight(discountThreshold)}</span>
+                  <span>−{eur(discount)}</span>
+                </div>
+              )}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, color: "#e0cdb8", marginBottom: 12 }}>
                 <span>Order fee</span>
                 <span>{eur(settings.order_fee)}</span>
@@ -877,7 +876,7 @@ export default function PackBuilder({ dishes, extras, settings }: { dishes: Dish
   );
 }
 
-function SoldOutBadge() {
+function Pill({ bg, children }: { bg: string; children: React.ReactNode }) {
   return (
     <span
       style={{
@@ -885,13 +884,80 @@ function SoldOutBadge() {
         fontWeight: 600,
         letterSpacing: "0.1em",
         textTransform: "uppercase",
-        background: "#5e1d22",
+        background: bg,
         color: "#fdf6e8",
         borderRadius: 999,
         padding: "3px 9px",
+        whiteSpace: "nowrap",
       }}
     >
-      Sold out
+      {children}
     </span>
+  );
+}
+
+function SoldOutBadge() {
+  return <Pill bg="#5e1d22">Sold out</Pill>;
+}
+
+/** Compact − qty + control; shared by the size boxes and the side tiles. */
+function Stepper({
+  qty,
+  onDec,
+  onInc,
+  disabled,
+  decDisabled = false,
+  incDisabled = false,
+  incDimmed = false,
+  label,
+}: {
+  qty: number;
+  onDec: () => void;
+  onInc: () => void;
+  disabled: boolean;
+  decDisabled?: boolean;
+  incDisabled?: boolean;
+  incDimmed?: boolean;
+  label: string;
+}) {
+  const btn: React.CSSProperties = {
+    width: 36,
+    height: 36,
+    borderRadius: "50%",
+    border: "none",
+    fontSize: 20,
+    fontWeight: 500,
+    cursor: "pointer",
+    lineHeight: 1,
+  };
+  return (
+    <div
+      className="sd-stepper"
+      style={{ display: "flex", alignItems: "center", gap: 2, borderRadius: 999, padding: 3, background: "#f6eee0", width: "100%" }}
+    >
+      <button
+        type="button"
+        onClick={onDec}
+        disabled={disabled || decDisabled}
+        aria-label={`One less ${label}`}
+        className="sd-qty-dec"
+        style={{ ...btn, background: "transparent", color: "#5e1d22" }}
+      >
+        –
+      </button>
+      <span className="sd-qty-count" style={{ minWidth: 22, textAlign: "center", fontWeight: 700, fontSize: 15, color: "#5e1d22" }}>
+        {qty}
+      </span>
+      <button
+        type="button"
+        onClick={onInc}
+        disabled={disabled || incDisabled}
+        aria-label={`One more ${label}`}
+        className="sd-qty-inc"
+        style={{ ...btn, background: "#c8492a", color: "#fdf6e8", opacity: incDimmed ? 0.4 : 1 }}
+      >
+        +
+      </button>
+    </div>
   );
 }

@@ -17,7 +17,7 @@ export default async function Home() {
       <Nav settings={data.settings} />
       <Hero hero={data.hero} images={data.images} settings={data.settings} />
       <Rhythm settings={data.settings} />
-      <PackBuilder dishes={data.dishes} extras={data.extras} settings={data.settings} />
+      <PackBuilder dishes={data.dishes} extras={data.extras} sizes={data.sizes} settings={data.settings} />
       <Bios images={data.images} />
       <EventsForm />
       <Faq faq={data.faq} />
