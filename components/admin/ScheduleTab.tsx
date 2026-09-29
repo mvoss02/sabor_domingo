@@ -8,7 +8,7 @@ import type { Settings } from "@/lib/types";
 const OVERRIDES = [
   { value: "auto", label: "Automatic", hint: "Opens and closes by the weekly schedule below" },
   { value: "open", label: "Force open", hint: "Take orders regardless of the day" },
-  { value: "closed", label: "Force closed", hint: "Pause ordering — e.g. holiday week" },
+  { value: "closed", label: "Force closed", hint: "Pause ordering — e.g. holiday week. Press Save schedule below; the site follows within a minute." },
 ] as const;
 
 export default function ScheduleTab() {
@@ -62,7 +62,7 @@ export default function ScheduleTab() {
         closed_message: s.closed_message,
       })
       .eq("id", 1);
-    setStatus(error ? `Error: ${error.message}` : "Schedule saved");
+    setStatus(error ? `Error: ${error.message}` : "Schedule saved · the site follows within a minute");
   }
 
   const daySelect = (value: string, set: (d: string) => void) => (
