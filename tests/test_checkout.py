@@ -11,15 +11,17 @@ AMS = ZoneInfo("Europe/Amsterdam")
 OPEN_NOW = datetime(2026, 9, 3, 15, 0, tzinfo=AMS)      # Thursday
 CLOSED_NOW = datetime(2026, 8, 31, 12, 0, tzinfo=AMS)   # Monday
 
-SETTINGS_ROW = {"price_4": 39, "price_10": 85, "order_fee": 4, "max_packs": 5,
+SETTINGS_ROW = {"order_fee": 4, "max_packs": 5, "discount_threshold_grams": 2000, "discount_pct": 3,
                 "open_day": "Wednesday", "close_day": "Sunday", "cutoff_time": "22:00",
                 "cook_day": "Monday",
                 "window_override": "auto", "delivery_days": ["Monday", "Tuesday", "Wednesday"]}
-DISH_ROWS = [{"id": "d1", "name": "Cochinita", "available": True}]
-EXTRA_ROWS = [{"id": "x1", "name": "Salsa roja", "price": 2.5, "included": False, "max_qty": 5, "available": True},
-              {"id": "x2", "name": "Tortillas · maiz", "price": 3, "included": True, "max_qty": 5, "available": True}]
+DISH_ROWS = [{"id": "d1", "name": "Cochinita", "category": "chef", "available": True}]
+SIZE_ROWS = [{"id": "s400", "name": "El Chico", "grams": 400, "price_classic": 13.5, "price_chef": 17.5},
+             {"id": "s750", "name": "El Grande", "grams": 750, "price_classic": 22.5, "price_chef": 29.5}]
+EXTRA_ROWS = [{"id": "x1", "name": "Salsa roja", "price": 2.5, "free_per_pack": 0, "max_qty": 5, "available": True},
+              {"id": "x2", "name": "Tortillas · maiz", "price": 3, "free_per_pack": 5, "max_qty": 5, "available": True}]
 
-VALID_BODY = {"lines": [{"dish_id": "d1", "pack_size": 10, "qty": 1}],
+VALID_BODY = {"lines": [{"dish_id": "d1", "size_id": "s750", "qty": 1}],
               "name": "Ana", "email": "ana@example.com",
               "address": "Javastraat 44", "postal_code": "1094 hh", "phone": "+31612345678",
               "notes": "", "delivery_day": "Monday"}
@@ -76,6 +78,8 @@ def fake_db():
             m.execute.return_value = MagicMock(data=DISH_ROWS)
         elif name == "extras":
             m.execute.return_value = MagicMock(data=EXTRA_ROWS)
+        elif name == "pack_sizes":
+            m.execute.return_value = MagicMock(data=SIZE_ROWS)
         elif name == "orders":
             m.execute.return_value = MagicMock(data=[{"id": "order-uuid-1", "ref_num": 241}])
         else:
@@ -91,10 +95,12 @@ def post(body, now):
     db = fake_db()
     with patch.object(orders, "_now", return_value=now), \
          patch.object(orders, "get_client", return_value=db), \
+         patch.object(orders.stripe.Coupon, "create", return_value=MagicMock(id="coupon_1")) as cc, \
          patch.object(orders.stripe.checkout.Session, "create",
                       return_value=MagicMock(id="cs_123", url="https://stripe.test/pay")) as sc:
         client = TestClient(app)
         resp = client.post("/api/py/checkout", json=body)
+        sc.coupon_create = cc
         return resp, sc, db
 
 
@@ -106,9 +112,13 @@ def test_happy_path_returns_stripe_url(monkeypatch):
     assert resp.json()["url"] == "https://stripe.test/pay"
     kwargs = sc.call_args.kwargs
     assert kwargs["metadata"]["order_id"] == "order-uuid-1"
-    # total: 85 + 4 fee, in cents, across line items
+    # total: 29.50 (chef, El Grande) + 4 fee, in cents, across line items
     amounts = [li["price_data"]["unit_amount"] * li["quantity"] for li in kwargs["line_items"]]
-    assert sum(amounts) == 8900
+    assert sum(amounts) == 3350
+    # 750 g is under the 2 kg threshold: no coupon, no discount on the order
+    assert kwargs["discounts"] == []
+    assert not sc.coupon_create.called
+    assert db.table("orders").insert.call_args.args[0]["discount"] == 0
     # order is inserted explicitly as pending_payment, not left to an
     # unverified DB column default.
     insert_payload = db.table("orders").insert.call_args.args[0]
@@ -174,16 +184,38 @@ def test_extras_become_order_lines_and_stripe_lines(monkeypatch):
     resp, sc, db = post(body, OPEN_NOW)
     assert resp.status_code == 200, resp.text
     items = db.table("order_items").insert.call_args.args[0]
-    assert [(i["kind"], i["pack_size"], i["dish_name"], i["qty"], i["unit_price"]) for i in items] == [
-        ("pack", 10, "Cochinita", 1, 85.0),
-        ("extra", None, "Salsa roja", 2, 2.5),
-        ("extra", None, "Tortillas · maiz", 1, 0.0),
+    assert [(i["kind"], i["pack_size"], i["size_name"], i["dish_name"], i["qty"], i["unit_price"]) for i in items] == [
+        ("pack", 750, "El Grande", "Cochinita", 1, 29.5),
+        ("extra", None, "", "Salsa roja", 2, 2.5),
+        ("extra", None, "", "Tortillas · maiz", 1, 0.0),
     ]
     names = [li["price_data"]["product_data"]["name"] for li in sc.call_args.kwargs["line_items"]]
     # the free tortillas are on the order but not a Stripe line
-    assert names == ["10-meal pack · Cochinita", "Salsa roja", "Order fee"]
+    assert names == ["El Grande · Cochinita", "Salsa roja", "Order fee"]
     amounts = [li["price_data"]["unit_amount"] * li["quantity"] for li in sc.call_args.kwargs["line_items"]]
-    assert sum(amounts) == 8500 + 500 + 400
+    assert sum(amounts) == 2950 + 500 + 400
+
+
+def test_grams_discount_becomes_a_stripe_coupon(monkeypatch):
+    """Over the threshold the server computes the discount itself, stores it
+    on the order and hands Stripe a one-off coupon for exactly that amount.
+    Nothing in the request body can set the discount."""
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    body = {**VALID_BODY, "lines": [{"dish_id": "d1", "size_id": "s750", "qty": 3}], "discount": 99}
+    resp, sc, db = post(body, OPEN_NOW)
+    assert resp.status_code == 200, resp.text
+    packs = 3 * 2950
+    expected = round(packs * 0.03)  # 2250 g > 2000 g
+    order = db.table("orders").insert.call_args.args[0]
+    assert order["discount"] == expected / 100
+    assert order["total"] == (packs - expected + 400) / 100
+    coupon_kwargs = sc.coupon_create.call_args.kwargs
+    assert (coupon_kwargs["amount_off"], coupon_kwargs["currency"], coupon_kwargs["duration"]) == (expected, "eur", "once")
+    assert sc.call_args.kwargs["discounts"] == [{"coupon": "coupon_1"}]
+    # line items still carry full prices; the coupon does the subtracting
+    amounts = [li["price_data"]["unit_amount"] * li["quantity"] for li in sc.call_args.kwargs["line_items"]]
+    assert sum(amounts) == packs + 400
 
 
 def test_extras_only_cart_400(monkeypatch):
@@ -191,4 +223,4 @@ def test_extras_only_cart_400(monkeypatch):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
     resp, _, _ = post({**VALID_BODY, "lines": [{"extra_id": "x1", "qty": 1}]}, OPEN_NOW)
     assert resp.status_code == 400
-    assert "meal pack" in resp.json()["detail"]
+    assert "at least one guiso" in resp.json()["detail"]

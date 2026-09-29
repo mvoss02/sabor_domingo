@@ -3,6 +3,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { adminButton, adminCard, adminInput, adminLabel } from "@/components/admin/ui";
 import { deliveryDate, eur, fmtDate } from "@/lib/window";
+import { lineLabel } from "@/lib/types";
 import type { Order, OrderItem, Settings } from "@/lib/types";
 
 const STATUS_LABEL: Record<string, string> = { pending_payment: "pending" };
@@ -32,11 +33,6 @@ const dangerButton: React.CSSProperties = { ...smallButton, background: "#c8492a
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
-}
-
-/** "10-meal · Cochinita" for packs, just the name for extras. */
-function lineLabel(i: OrderItem): string {
-  return i.kind === "extra" ? i.dish_name : `${i.pack_size}-meal · ${i.dish_name}`;
 }
 
 type Panel = "none" | "edit" | "refund";
@@ -228,8 +224,11 @@ function EditPanel({
   const [refundFee, setRefundFee] = useState(false);
 
   const fee = Number(o.fee);
+  // The grams discount was granted at checkout and stays as paid: edits
+  // settle the difference in lines, they never re-run the discount rule.
+  const discount = Number(o.discount ?? 0);
   const packsValue = round2(items.reduce((n, i) => n + i.qty * Number(i.unit_price), 0));
-  const itemsTotal = round2(packsValue + fee);
+  const itemsTotal = round2(Math.max(0, packsValue - discount) + fee);
   const packsReduced = items.some((i) => i.qty < (o.order_items.find((x) => x.id === i.id)?.qty ?? 0));
   const alreadyRefunded = Number(o.refunded_total ?? 0);
   // What the customer should end up having paid vs what they actually did.
@@ -264,7 +263,7 @@ function EditPanel({
       }
     }
     const kept = items.filter((i) => i.qty > 0);
-    const updated: Order = { ...o, ...draft, order_items: kept, subtotal: round2(itemsTotal - Number(o.fee)) };
+    const updated: Order = { ...o, ...draft, order_items: kept, subtotal: packsValue };
     setBusy(false);
     onSaved(updated, diff);
   }
@@ -335,7 +334,7 @@ function EditPanel({
       )}
 
       <div style={{ fontSize: 13.5, color: "#5e1d22" }}>
-        New order value <strong>{eur(itemsTotal)}</strong> (incl. {eur(fee)} fee) · paid {eur(Number(o.total))}
+        New order value <strong>{eur(itemsTotal)}</strong> (incl. {eur(fee)} fee{discount > 0 && <>, {eur(discount)} discount kept</>}) · paid {eur(Number(o.total))}
         {alreadyRefunded > 0 && <> · already refunded {eur(alreadyRefunded)}</>}
         {diff > 0 && (
           <span style={{ color: "#c8492a", fontWeight: 600 }}> · {eur(diff)} to refund after saving</span>
