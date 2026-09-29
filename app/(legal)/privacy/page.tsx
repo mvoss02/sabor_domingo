@@ -17,9 +17,9 @@ export default function PrivacyPage() {
       <p style={{ color: "#a1806f", fontSize: 13 }}>Last updated: September 2026</p>
 
       <p>
-        Sabor Domingo (&ldquo;we&rdquo;) is a small food business in Amsterdam, run by
-        [FULL NAMES], registered with the Dutch Chamber of Commerce under KvK number
-        [KVK NUMBER]. This page explains what personal data we handle when you use
+        Sabor Domingo (&ldquo;we&rdquo;) is a small food business in Amsterdam, owned by
+        Maria Ines Barcena Santacruz and registered with the Dutch Chamber of Commerce
+        under KvK number 42138905 (VAT ID NL005527552B10). This page explains what personal data we handle when you use
         sabordomingo.nl, and why. Questions: hola@sabordomingo.nl.
       </p>
 

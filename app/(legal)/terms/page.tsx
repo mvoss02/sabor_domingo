@@ -17,8 +17,9 @@ export default function TermsPage() {
       <p style={{ color: "#a1806f", fontSize: 13 }}>Last updated: September 2026</p>
 
       <p>
-        These terms apply to orders placed at sabordomingo.nl, operated by Sabor Domingo,
-        [FULL NAMES], Amsterdam, KvK [KVK NUMBER], BTW [BTW NUMBER], hola@sabordomingo.nl.
+        These terms apply to orders placed at sabordomingo.nl, operated by Sabor Domingo
+        (owner: Maria Ines Barcena Santacruz), Amsterdam, KvK 42138905, BTW NL005527552B10,
+        hola@sabordomingo.nl.
       </p>
 
       <h2 style={h2}>How ordering works</h2>
