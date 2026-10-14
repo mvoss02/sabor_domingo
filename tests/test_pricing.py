@@ -1,6 +1,6 @@
 import pytest
 
-from api._lib.pricing import CartError, discount_for, price_order
+from api._lib.pricing import CartError, discount_for, price_order, promo_for
 
 DISHES = [
     {"id": "d1", "name": "Cochinita", "category": "chef", "available": True},
@@ -225,3 +225,48 @@ def test_extras_global_cap():
     with pytest.raises(CartError, match="Maximum 6 sides"):
         price_order([PACK, {"extra_id": "x1", "qty": 5}, {"extra_id": "x2", "qty": 2}], DISHES, SETTINGS_X, EXTRAS, SIZES)
     price_order([PACK, {"extra_id": "x1", "qty": 4}, {"extra_id": "x2", "qty": 2}], DISHES, SETTINGS_X, EXTRAS, SIZES)
+
+
+# --- promotion ------------------------------------------------------------------
+# Stacks after the grams discount. percent: on the guisos left after that
+# discount. amount: flat off guisos + sides after that discount, never the fee.
+
+PROMO_PCT = {**DISCOUNT_ON, "promo_active": True, "promo_kind": "percent", "promo_value": 10}
+PROMO_EUR = {**DISCOUNT_ON, "promo_active": True, "promo_kind": "amount", "promo_value": 5}
+
+
+def test_promo_percent_stacks_after_grams_discount():
+    # 3 × 750 g = 2250 g > 2000 → 3% grams discount, then 10% promo on what is left
+    t = price_order([line("d1", "s750", 3)], DISHES, PROMO_PCT, sizes=SIZES)
+    packs = 3 * 2950
+    grams_off = round(packs * 0.03)
+    assert t.discount_cents == grams_off
+    assert t.promo_cents == round((packs - grams_off) * 0.10)
+    assert t.total_cents == packs - grams_off - t.promo_cents + 400
+
+
+def test_promo_percent_ignores_sides_and_fee():
+    extras = [{"id": "x1", "name": "Salsa roja", "price": 5.5, "included": False, "max_qty": 5, "available": True}]
+    t = price_order([line("d2", "s400"), {"extra_id": "x1", "qty": 2}], DISHES, PROMO_PCT, extras, SIZES)
+    assert t.discount_cents == 0  # 400 g, under the threshold
+    assert t.promo_cents == 135  # 10% of 1350, not of the 1100 of sides
+    assert t.total_cents == 1350 + 1100 - 135 + 400
+
+
+def test_promo_amount_comes_off_the_order_but_never_the_fee():
+    extras = [{"id": "x1", "name": "Salsa roja", "price": 5.5, "included": False, "max_qty": 5, "available": True}]
+    t = price_order([line("d2", "s400"), {"extra_id": "x1", "qty": 1}], DISHES, PROMO_EUR, extras, SIZES)
+    assert t.promo_cents == 500
+    assert t.total_cents == 1350 + 550 - 500 + 400
+    # A promo bigger than the order is capped: the customer still pays the fee.
+    big = {**PROMO_EUR, "promo_value": 50}
+    t = price_order([line("d2", "s400")], DISHES, big, sizes=SIZES)
+    assert t.promo_cents == 1350
+    assert t.total_cents == 400
+
+
+def test_promo_off_when_inactive_or_zero_or_missing():
+    assert promo_for(10000, 12000, {**PROMO_PCT, "promo_active": False}) == 0
+    assert promo_for(10000, 12000, {**PROMO_PCT, "promo_value": 0}) == 0
+    assert promo_for(10000, 12000, {}) == 0
+    assert promo_for(1050, 1050, {"promo_active": True, "promo_kind": "percent", "promo_value": 5}) == 53  # 52.5 → 53

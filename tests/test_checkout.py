@@ -224,3 +224,28 @@ def test_extras_only_cart_400(monkeypatch):
     resp, _, _ = post({**VALID_BODY, "lines": [{"extra_id": "x1", "qty": 1}]}, OPEN_NOW)
     assert resp.status_code == 400
     assert "at least one guiso" in resp.json()["detail"]
+
+
+def test_promo_and_grams_discount_share_one_stripe_coupon(monkeypatch):
+    """Stripe Checkout takes a single coupon per session, so the grams
+    discount and the promotion travel as one coupon but are stored as two
+    columns on the order. The promo stacks after the grams discount."""
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    monkeypatch.setitem(SETTINGS_ROW, "promo_active", True)
+    monkeypatch.setitem(SETTINGS_ROW, "promo_kind", "percent")
+    monkeypatch.setitem(SETTINGS_ROW, "promo_value", 10)
+    body = {**VALID_BODY, "lines": [{"dish_id": "d1", "size_id": "s750", "qty": 3}], "promo_discount": 99}
+    resp, sc, db = post(body, OPEN_NOW)
+    assert resp.status_code == 200, resp.text
+    packs = 3 * 2950
+    grams_off = round(packs * 0.03)
+    promo_off = round((packs - grams_off) * 0.10)
+    order = db.table("orders").insert.call_args.args[0]
+    assert order["discount"] == grams_off / 100
+    assert order["promo_discount"] == promo_off / 100
+    assert order["total"] == (packs - grams_off - promo_off + 400) / 100
+    coupon_kwargs = sc.coupon_create.call_args.kwargs
+    assert coupon_kwargs["amount_off"] == grams_off + promo_off
+    assert "promotion" in coupon_kwargs["name"]
+    assert sc.call_args.kwargs["discounts"] == [{"coupon": "coupon_1"}]

@@ -48,19 +48,26 @@ def _discount(order: dict) -> float:
     return float(order.get("discount") or 0)
 
 
+def _promo(order: dict) -> float:
+    return float(order.get("promo_discount") or 0)
+
+
 def _totals_text(order: dict) -> str:
     d = _discount(order)
+    p = _promo(order)
     line = f"Discount: −€{_eur(d)}\n" if d > 0 else ""
+    line += f"Promotion: −€{_eur(p)}\n" if p > 0 else ""
     return f"{line}Total: €{_eur(order['total'])}"
 
 
 def _totals_html(order: dict) -> str:
-    d = _discount(order)
-    disc = (
-        f'<tr><td style="font-size:14px;color:#2e6b3e;">Discount</td>'
-        f'<td style="text-align:right;font-size:14px;color:#2e6b3e;">&minus;&euro;{_eur(d)}</td></tr>'
-        if d > 0 else ""
-    )
+    def row(label: str, amount: float) -> str:
+        return (
+            f'<tr><td style="font-size:14px;color:#2e6b3e;">{label}</td>'
+            f'<td style="text-align:right;font-size:14px;color:#2e6b3e;">&minus;&euro;{_eur(amount)}</td></tr>'
+            if amount > 0 else ""
+        )
+    disc = row("Discount", _discount(order)) + row("Promotion", _promo(order))
     return (
         f'<table style="width:100%;border-collapse:collapse;margin-top:10px;">{disc}<tr>'
         f'<td style="font-weight:600;font-size:15px;color:#5e1d22;">Total</td>'

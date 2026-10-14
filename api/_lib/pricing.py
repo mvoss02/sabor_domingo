@@ -31,6 +31,7 @@ class Totals:
     total_cents: int
     items: list[Item]
     grams: int = 0
+    promo_cents: int = 0
 
 
 def _cents(euros) -> int:
@@ -46,6 +47,24 @@ def discount_for(packs_cents: int, grams: int, settings: dict) -> int:
     if pct <= 0 or grams <= threshold:
         return 0
     amount = (Decimal(packs_cents) * pct / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return int(amount)
+
+
+def promo_for(packs_cents: int, order_cents: int, settings: dict) -> int:
+    """The promotion, applied after the grams discount. `packs_cents` is the
+    guisos subtotal with the grams discount already taken; `order_cents` is
+    guisos + sides after that discount (the fee is never discounted).
+    percent: promo_value % of packs_cents, rounded half up.
+    amount: a flat €promo_value, capped at order_cents so the total never
+    drops below the fee. promo_active false or value 0 means no promo."""
+    if not settings.get("promo_active"):
+        return 0
+    value = Decimal(str(settings.get("promo_value") or 0))
+    if value <= 0:
+        return 0
+    if settings.get("promo_kind") == "amount":
+        return min(_cents(value), max(order_cents, 0))
+    amount = (Decimal(packs_cents) * value / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     return int(amount)
 
 
@@ -133,5 +152,6 @@ def price_order(lines: list[dict], dishes: list[dict], settings: dict,
     packs_cents = sum(i.unit_price_cents * i.qty for i in items if i.kind == "pack")
     subtotal = sum(i.unit_price_cents * i.qty for i in items)
     discount = discount_for(packs_cents, grams, settings)
+    promo = promo_for(packs_cents - discount, subtotal - discount, settings)
     fee = _cents(settings["order_fee"])
-    return Totals(subtotal, discount, fee, subtotal - discount + fee, items, grams)
+    return Totals(subtotal, discount, fee, subtotal - discount - promo + fee, items, grams, promo)

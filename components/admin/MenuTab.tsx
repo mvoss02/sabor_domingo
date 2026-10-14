@@ -5,7 +5,7 @@ import { imageUrl } from "@/lib/content";
 import ImagePicker from "@/components/admin/ImagePicker";
 import { adminButton, adminCard, adminInput, adminLabel } from "@/components/admin/ui";
 import { CATEGORY_LABEL, DISH_CATEGORIES, DISH_TAGS, NUTRITION_FIELDS, freeMode } from "@/lib/types";
-import type { Dish, DishCategory, DishTag, Extra, FreeMode, Nutrition, PackSize, Settings } from "@/lib/types";
+import type { Dish, DishCategory, DishTag, Extra, FreeMode, Nutrition, PackSize, PromoKind, Settings } from "@/lib/types";
 
 // Available / sold out switch. Sold-out items stay on the site, greyed and
 // unselectable, so customers see what exists this week.
@@ -397,6 +397,9 @@ export default function MenuTab() {
     if (settings.max_packs < 0 || settings.max_extras < 0) return note("rules", "Error: limits can't be negative (0 = no limit)");
     if (settings.discount_pct < 0 || settings.discount_pct > 100) return note("rules", "Error: discount must be between 0 and 100%");
     if (settings.discount_threshold_grams < 0) return note("rules", "Error: the discount threshold can't be negative");
+    if (settings.promo_value < 0) return note("rules", "Error: the promotion can't be negative");
+    if (settings.promo_kind === "percent" && settings.promo_value > 100) return note("rules", "Error: a percent promotion must be 100% or less");
+    if (settings.promo_active && settings.promo_value <= 0) return note("rules", "Error: switch the promotion off or give it a value");
     return run("rules", async () => {
       const { error } = await supabase
         .from("settings")
@@ -407,6 +410,10 @@ export default function MenuTab() {
           discount_threshold_grams: Math.round(settings.discount_threshold_grams),
           discount_pct: settings.discount_pct,
           discount_hint: settings.discount_hint,
+          promo_active: !!settings.promo_active,
+          promo_kind: settings.promo_kind ?? "percent",
+          promo_value: settings.promo_value ?? 0,
+          promo_text: settings.promo_text ?? "",
         })
         .eq("id", 1);
       return error ? `Error: ${error.message}` : "Order rules saved · live within a minute";
@@ -796,6 +803,55 @@ export default function MenuTab() {
                   value={settings.discount_hint ?? ""}
                   placeholder="Order more than 2 kg of guisos and get 3% off."
                   onChange={(e) => setSettings({ ...settings, discount_hint: e.target.value })}
+                  style={adminInput}
+                />
+              </label>
+            </div>
+
+            <div style={{ borderTop: "1px solid #ece0cb", paddingTop: 12 }}>
+              <span style={{ ...adminLabel, color: "#5e1d22" }}>
+                Promotion · stacks after the quantity discount. Percent comes off the guisos; a euro amount comes off the whole order, never the fee
+              </span>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto", paddingBottom: 9, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={!!settings.promo_active}
+                    onChange={(e) => setSettings({ ...settings, promo_active: e.target.checked })}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#5e1d22" }}>Promotion on</span>
+                </label>
+                <label style={{ display: "block", flex: "1 1 140px" }}>
+                  <span style={adminLabel}>Type</span>
+                  <select
+                    value={settings.promo_kind ?? "percent"}
+                    onChange={(e) => setSettings({ ...settings, promo_kind: e.target.value as PromoKind })}
+                    style={adminInput}
+                  >
+                    <option value="percent">Percent off the guisos</option>
+                    <option value="amount">Euro amount off the order</option>
+                  </select>
+                </label>
+                <label style={{ display: "block", flex: "1 1 120px" }}>
+                  <span style={adminLabel}>{settings.promo_kind === "amount" ? "Amount (€)" : "Percent (%)"}</span>
+                  <input
+                    type="number"
+                    step={settings.promo_kind === "amount" ? "0.5" : "1"}
+                    min="0"
+                    max={settings.promo_kind === "amount" ? undefined : "100"}
+                    value={settings.promo_value ?? 0}
+                    onChange={(e) => setSettings({ ...settings, promo_value: Number(e.target.value) })}
+                    style={adminInput}
+                  />
+                </label>
+              </div>
+              <label style={{ display: "block", marginTop: 10 }}>
+                <span style={adminLabel}>Promotion text shown on the site</span>
+                <input
+                  type="text"
+                  value={settings.promo_text ?? ""}
+                  placeholder={settings.promo_kind === "amount" ? "€5 off your order this week" : "10% off all guisos this week"}
+                  onChange={(e) => setSettings({ ...settings, promo_text: e.target.value })}
                   style={adminInput}
                 />
               </label>
