@@ -69,6 +69,7 @@ def create_checkout(payload: CheckoutPayload) -> str:
         # if the weekly schedule is changed later.
         "cook_date": cook_date_for(settings, now).isoformat(),
         "subtotal": totals.subtotal_cents / 100, "discount": totals.discount_cents / 100,
+        "promo_discount": totals.promo_cents / 100,
         "fee": totals.fee_cents / 100, "total": totals.total_cents / 100,
     }).execute().data[0]
 
@@ -80,13 +81,21 @@ def create_checkout(payload: CheckoutPayload) -> str:
     stripe.api_key = env("STRIPE_SECRET_KEY")
     site = env("SITE_URL")
     try:
-        # Stripe Checkout has no negative line items, so the grams discount
-        # goes in as a one-off coupon worth exactly what price_order computed.
+        # Stripe Checkout has no negative line items and takes a single coupon
+        # per session, so the grams discount and the promotion travel as one
+        # one-off coupon worth exactly what price_order computed. They stay
+        # two columns on the order for the admin and the emails.
         discounts = []
-        if totals.discount_cents > 0:
+        off_cents = totals.discount_cents + totals.promo_cents
+        if off_cents > 0:
+            names = []
+            if totals.discount_cents > 0:
+                names.append(f"{settings.get('discount_pct')}% guisos discount")
+            if totals.promo_cents > 0:
+                names.append("promotion")
             coupon = stripe.Coupon.create(
-                amount_off=totals.discount_cents, currency="eur", duration="once",
-                name=f"{settings.get('discount_pct')}% guisos discount",
+                amount_off=off_cents, currency="eur", duration="once",
+                name=" + ".join(names),
             )
             discounts = [{"coupon": coupon.id}]
         session = stripe.checkout.Session.create(

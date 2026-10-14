@@ -1,4 +1,5 @@
 import { imageUrl } from "@/lib/content";
+import LoadingImage from "@/components/site/LoadingImage";
 import NotifySignup from "@/components/site/NotifySignup";
 import type { HeroContent, ImageSlots, Settings } from "@/lib/types";
 
@@ -29,6 +30,12 @@ export default function Hero({
     maxPacks > 0 ? `Max ${maxPacks} packs` : null,
     discountPct > 0 ? `${discountPct}% off over ${kg}` : null,
   ].filter((f): f is string => !!f);
+  // Promotion band: the admin's text, or a sensible default from the numbers.
+  const promoValue = Number(settings.promo_value) || 0;
+  const promoOn = !!settings.promo_active && promoValue > 0;
+  const promoText =
+    settings.promo_text?.trim() ||
+    (settings.promo_kind === "amount" ? `${eur(promoValue)} off your order` : `${promoValue}% off the guisos`);
   const heroImg = imageUrl(images.hero) ?? "/img/hero.jpg";
 
   return (
@@ -68,6 +75,27 @@ export default function Hero({
           ></span>
           <span>{windowLabel}</span>
         </div>
+        {promoOn && (
+          <div
+            className="sd-promo-band"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              background: "#f2a63b",
+              color: "#5e1d22",
+              borderRadius: 999,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 700,
+              marginBottom: 14,
+              marginLeft: 8,
+            }}
+          >
+            <span style={{ fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.8 }}>Promo</span>
+            <span>{promoText}</span>
+          </div>
+        )}
         <div id="notify" style={{ display: windowOpen ? "none" : "block", maxWidth: 420, marginBottom: 20, scrollMarginTop: 90 }}>
           <NotifySignup />
         </div>
@@ -123,13 +151,14 @@ export default function Hero({
           </a>
           <a
             href="#howitworks"
-            className="sd-underline-link"
+            className="sd-cta-outline"
             style={{
-              padding: "16px 6px",
+              padding: "14px 26px",
+              borderRadius: 999,
+              border: "2px solid #f2a63b",
               fontWeight: 600,
-              fontSize: 15,
+              fontSize: 16,
               color: "#5e1d22",
-              borderBottom: "2px solid #f2a63b",
             }}
           >
             See the weekly rhythm
@@ -165,12 +194,7 @@ export default function Hero({
             marginLeft: "auto",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={heroImg}
-            alt="Sabor Domingo favourites"
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          />
+          <LoadingImage src={heroImg} alt="Sabor Domingo favourites" />
         </div>
       </div>
     </section>

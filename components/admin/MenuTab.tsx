@@ -5,7 +5,8 @@ import { imageUrl } from "@/lib/content";
 import ImagePicker from "@/components/admin/ImagePicker";
 import { adminButton, adminCard, adminInput, adminLabel } from "@/components/admin/ui";
 import { CATEGORY_LABEL, DISH_CATEGORIES, DISH_TAGS, NUTRITION_FIELDS, freeMode } from "@/lib/types";
-import type { Dish, DishCategory, DishTag, Extra, FreeMode, Nutrition, PackSize, Settings } from "@/lib/types";
+import type { Dish, DishCategory, DishTag, Extra, FreeMode, Nutrition, PackSize, PromoKind, Settings } from "@/lib/types";
+import NumberInput from "@/components/admin/NumberInput";
 
 // Available / sold out switch. Sold-out items stay on the site, greyed and
 // unselectable, so customers see what exists this week.
@@ -31,6 +32,59 @@ function SoldOutToggle({ available, onChange }: { available: boolean; onChange: 
       }}
     >
       {available ? "● Available" : "Sold out"}
+    </button>
+  );
+}
+
+// On/off switch: a pill track with a sliding knob, so the state reads at a
+// glance (green = on, grey = off) instead of a bare checkbox.
+function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={() => onChange(!on)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 10,
+        padding: 0,
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: "relative",
+          width: 44,
+          height: 26,
+          borderRadius: 999,
+          background: on ? "#2e6b3e" : "#d9c7b2",
+          transition: "background 150ms ease",
+          flex: "0 0 auto",
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 3,
+            left: on ? 21 : 3,
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#fdf6e8",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
+            transition: "left 150ms ease",
+          }}
+        />
+      </span>
+      <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: on ? "#2e6b3e" : "#a1806f" }}>
+        {on ? "On" : "Off"}
+      </span>
     </button>
   );
 }
@@ -397,6 +451,9 @@ export default function MenuTab() {
     if (settings.max_packs < 0 || settings.max_extras < 0) return note("rules", "Error: limits can't be negative (0 = no limit)");
     if (settings.discount_pct < 0 || settings.discount_pct > 100) return note("rules", "Error: discount must be between 0 and 100%");
     if (settings.discount_threshold_grams < 0) return note("rules", "Error: the discount threshold can't be negative");
+    if (settings.promo_value < 0) return note("rules", "Error: the promotion can't be negative");
+    if (settings.promo_kind === "percent" && settings.promo_value > 100) return note("rules", "Error: a percent promotion must be 100% or less");
+    if (settings.promo_active && settings.promo_value <= 0) return note("rules", "Error: switch the promotion off or give it a value");
     return run("rules", async () => {
       const { error } = await supabase
         .from("settings")
@@ -407,6 +464,10 @@ export default function MenuTab() {
           discount_threshold_grams: Math.round(settings.discount_threshold_grams),
           discount_pct: settings.discount_pct,
           discount_hint: settings.discount_hint,
+          promo_active: !!settings.promo_active,
+          promo_kind: settings.promo_kind ?? "percent",
+          promo_value: settings.promo_value ?? 0,
+          promo_text: settings.promo_text ?? "",
         })
         .eq("id", 1);
       return error ? `Error: ${error.message}` : "Order rules saved · live within a minute";
@@ -565,7 +626,7 @@ export default function MenuTab() {
               </label>
               <label style={{ flex: "0 1 110px", minWidth: 0 }}>
                 <span style={adminLabel}>Grams</span>
-                <input type="number" step="10" min="1" value={s.grams} onChange={(e) => editSize(s.id, { grams: Number(e.target.value) })} style={adminInput} />
+                <NumberInput step="10" min="1" value={s.grams} onChange={(n) => editSize(s.id, { grams: n })} />
               </label>
               <label style={{ flex: "1 1 140px", minWidth: 0 }}>
                 <span style={adminLabel}>Serves (shown under the name)</span>
@@ -573,11 +634,11 @@ export default function MenuTab() {
               </label>
               <label style={{ flex: "0 1 130px", minWidth: 0 }}>
                 <span style={adminLabel}>{CATEGORY_LABEL.classic} €</span>
-                <input type="number" step="0.5" min="0.5" value={s.price_classic} onChange={(e) => editSize(s.id, { price_classic: Number(e.target.value) })} style={adminInput} />
+                <NumberInput step="0.5" min="0.5" value={s.price_classic} onChange={(n) => editSize(s.id, { price_classic: n })} />
               </label>
               <label style={{ flex: "0 1 130px", minWidth: 0 }}>
                 <span style={adminLabel}>{CATEGORY_LABEL.chef} €</span>
-                <input type="number" step="0.5" min="0.5" value={s.price_chef} onChange={(e) => editSize(s.id, { price_chef: Number(e.target.value) })} style={adminInput} />
+                <NumberInput step="0.5" min="0.5" value={s.price_chef} onChange={(n) => editSize(s.id, { price_chef: n })} />
               </label>
             </div>
             <SaveRow busy={!!busy[s.id]} status={cardStatus[s.id] ?? null} onSave={() => saveSize(s)} onDelete={() => deleteSize(s)} />
@@ -651,63 +712,28 @@ export default function MenuTab() {
                 {freeMode(x) === "per_order" && (
                   <label style={{ flex: "0 1 120px", minWidth: 0 }}>
                     <span style={adminLabel}>Free per order</span>
-                    <input
-                      type="number"
-                      step="1"
-                      min="1"
-                      value={x.free_per_order ?? 0}
-                      onChange={(e) => editExtra(x.id, { free_per_order: Number(e.target.value) })}
-                      style={adminInput}
-                    />
+                    <NumberInput step="1" min="1" value={x.free_per_order} onChange={(n) => editExtra(x.id, { free_per_order: n })} />
                   </label>
                 )}
                 {freeMode(x) === "per_pack" && (
                   <>
                     <label style={{ flex: "0 1 120px", minWidth: 0 }}>
                       <span style={adminLabel}>Free per pack</span>
-                      <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        value={x.free_per_pack ?? 0}
-                        onChange={(e) => editExtra(x.id, { free_per_pack: Number(e.target.value) })}
-                        style={adminInput}
-                      />
+                      <NumberInput step="1" min="1" value={x.free_per_pack} onChange={(n) => editExtra(x.id, { free_per_pack: n })} />
                     </label>
                     <label style={{ flex: "0 1 130px", minWidth: 0 }}>
                       <span style={adminLabel}>Max free (0 = no cap)</span>
-                      <input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={x.max_free ?? 0}
-                        onChange={(e) => editExtra(x.id, { max_free: Number(e.target.value) })}
-                        style={adminInput}
-                      />
+                      <NumberInput step="1" min="0" value={x.max_free} onChange={(n) => editExtra(x.id, { max_free: n })} />
                     </label>
                   </>
                 )}
                 <label style={{ flex: "0 1 110px", minWidth: 0 }}>
                   <span style={adminLabel}>Then € each</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    value={x.price}
-                    onChange={(e) => editExtra(x.id, { price: Number(e.target.value) })}
-                    style={adminInput}
-                  />
+                  <NumberInput step="0.5" min="0" value={x.price} onChange={(n) => editExtra(x.id, { price: n })} />
                 </label>
                 <label style={{ flex: "0 1 130px", minWidth: 0 }}>
                   <span style={adminLabel}>Max per order</span>
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
-                    value={x.max_qty}
-                    onChange={(e) => editExtra(x.id, { max_qty: Number(e.target.value) })}
-                    style={adminInput}
-                  />
+                  <NumberInput step="1" min="1" value={x.max_qty} onChange={(n) => editExtra(x.id, { max_qty: n })} />
                 </label>
               </div>
               <label style={{ display: "block", marginTop: 10 }}>
@@ -728,37 +754,16 @@ export default function MenuTab() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label style={{ display: "block" }}>
               <span style={adminLabel}>Order fee €</span>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                value={settings.order_fee}
-                onChange={(e) => setSettings({ ...settings, order_fee: Number(e.target.value) })}
-                style={adminInput}
-              />
+              <NumberInput step="0.5" min="0" value={settings.order_fee} onChange={(n) => setSettings({ ...settings, order_fee: n })} />
             </label>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <label style={{ display: "block", flex: "1 1 180px" }}>
                 <span style={adminLabel}>Max packs per order (0 = no limit)</span>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={settings.max_packs}
-                  onChange={(e) => setSettings({ ...settings, max_packs: Number(e.target.value) })}
-                  style={adminInput}
-                />
+                <NumberInput step="1" min="0" value={settings.max_packs} onChange={(n) => setSettings({ ...settings, max_packs: n })} />
               </label>
               <label style={{ display: "block", flex: "1 1 180px" }}>
                 <span style={adminLabel}>Max sides per order (0 = no limit)</span>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={settings.max_extras ?? 10}
-                  onChange={(e) => setSettings({ ...settings, max_extras: Number(e.target.value) })}
-                  style={adminInput}
-                />
+                <NumberInput step="1" min="0" value={settings.max_extras ?? 10} onChange={(n) => setSettings({ ...settings, max_extras: n })} />
               </label>
             </div>
 
@@ -767,26 +772,16 @@ export default function MenuTab() {
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <label style={{ display: "block", flex: "1 1 160px" }}>
                   <span style={adminLabel}>More than … grams</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     step="100"
                     min="0"
-                    value={settings.discount_threshold_grams ?? 0}
-                    onChange={(e) => setSettings({ ...settings, discount_threshold_grams: Number(e.target.value) })}
-                    style={adminInput}
+                    value={settings.discount_threshold_grams}
+                    onChange={(n) => setSettings({ ...settings, discount_threshold_grams: n })}
                   />
                 </label>
                 <label style={{ display: "block", flex: "1 1 120px" }}>
                   <span style={adminLabel}>Discount % (0 = off)</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="100"
-                    value={settings.discount_pct ?? 0}
-                    onChange={(e) => setSettings({ ...settings, discount_pct: Number(e.target.value) })}
-                    style={adminInput}
-                  />
+                  <NumberInput step="0.5" min="0" max="100" value={settings.discount_pct} onChange={(n) => setSettings({ ...settings, discount_pct: n })} />
                 </label>
               </div>
               <label style={{ display: "block", marginTop: 10 }}>
@@ -796,6 +791,53 @@ export default function MenuTab() {
                   value={settings.discount_hint ?? ""}
                   placeholder="Order more than 2 kg of guisos and get 3% off."
                   onChange={(e) => setSettings({ ...settings, discount_hint: e.target.value })}
+                  style={adminInput}
+                />
+              </label>
+            </div>
+
+            <div style={{ borderTop: "1px solid #ece0cb", paddingTop: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ ...adminLabel, color: "#5e1d22", margin: 0 }}>Promotion</span>
+                <Switch
+                  on={!!settings.promo_active}
+                  onChange={(v) => setSettings({ ...settings, promo_active: v })}
+                  label="Promotion"
+                />
+              </div>
+              <p style={{ fontSize: 12.5, color: "#a1806f", lineHeight: 1.5, margin: "4px 0 12px" }}>
+                Stacks after the quantity discount. Percent comes off the guisos; a euro amount comes off the whole order, never the fee.
+              </p>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <label style={{ display: "block", flex: "2 1 200px" }}>
+                  <span style={adminLabel}>Type</span>
+                  <select
+                    value={settings.promo_kind ?? "percent"}
+                    onChange={(e) => setSettings({ ...settings, promo_kind: e.target.value as PromoKind })}
+                    style={adminInput}
+                  >
+                    <option value="percent">Percent off guisos</option>
+                    <option value="amount">Euros off the order</option>
+                  </select>
+                </label>
+                <label style={{ display: "block", flex: "1 1 120px" }}>
+                  <span style={adminLabel}>{settings.promo_kind === "amount" ? "Amount (€)" : "Percent (%)"}</span>
+                  <NumberInput
+                    step={settings.promo_kind === "amount" ? "0.5" : "1"}
+                    min="0"
+                    max={settings.promo_kind === "amount" ? undefined : "100"}
+                    value={settings.promo_value}
+                    onChange={(n) => setSettings({ ...settings, promo_value: n })}
+                  />
+                </label>
+              </div>
+              <label style={{ display: "block", marginTop: 10 }}>
+                <span style={adminLabel}>Promotion text shown on the site</span>
+                <input
+                  type="text"
+                  value={settings.promo_text ?? ""}
+                  placeholder={settings.promo_kind === "amount" ? "€5 off your order this week" : "10% off all guisos this week"}
+                  onChange={(e) => setSettings({ ...settings, promo_text: e.target.value })}
                   style={adminInput}
                 />
               </label>

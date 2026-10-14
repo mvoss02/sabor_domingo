@@ -226,7 +226,7 @@ function EditPanel({
   const fee = Number(o.fee);
   // The grams discount was granted at checkout and stays as paid: edits
   // settle the difference in lines, they never re-run the discount rule.
-  const discount = Number(o.discount ?? 0);
+  const discount = Number(o.discount ?? 0) + Number(o.promo_discount ?? 0);
   const packsValue = round2(items.reduce((n, i) => n + i.qty * Number(i.unit_price), 0));
   const itemsTotal = round2(Math.max(0, packsValue - discount) + fee);
   const packsReduced = items.some((i) => i.qty < (o.order_items.find((x) => x.id === i.id)?.qty ?? 0));

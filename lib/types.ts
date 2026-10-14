@@ -71,6 +71,21 @@ export function freeMode(x: Extra): FreeMode {
   return "none";
 }
 
+export type PromoKind = "percent" | "amount";
+
+/**
+ * Promotion amount for display; mirrors promo_for in api/_lib/pricing.py.
+ * packsAfterDiscount: guisos subtotal with the grams discount taken.
+ * orderAfterDiscount: guisos + sides after the grams discount (never the fee).
+ */
+export function promoFor(packsAfterDiscount: number, orderAfterDiscount: number, s: Settings): number {
+  if (!s.promo_active) return 0;
+  const value = Number(s.promo_value ?? 0);
+  if (value <= 0) return 0;
+  if (s.promo_kind === "amount") return Math.min(value, Math.max(orderAfterDiscount, 0));
+  return Math.round((packsAfterDiscount * value) / 100 * 100) / 100;
+}
+
 export interface Settings {
   order_fee: number;
   max_packs: number;
@@ -78,6 +93,11 @@ export interface Settings {
   discount_threshold_grams: number;
   discount_pct: number;
   discount_hint: string;
+  /** One promotion at a time; stacks after the grams discount. */
+  promo_active: boolean;
+  promo_kind: PromoKind;
+  promo_value: number;
+  promo_text: string;
   open_day: string;
   close_day: string;
   cutoff_time: string;
@@ -149,6 +169,7 @@ export interface Order {
   cook_date: string;
   subtotal: number;
   discount: number;
+  promo_discount: number;
   fee: number;
   total: number;
   refunded_total: number;
