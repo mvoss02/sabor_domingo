@@ -6,6 +6,7 @@ import ImagePicker from "@/components/admin/ImagePicker";
 import { adminButton, adminCard, adminInput, adminLabel } from "@/components/admin/ui";
 import { CATEGORY_LABEL, DISH_CATEGORIES, DISH_TAGS, NUTRITION_FIELDS, freeMode } from "@/lib/types";
 import type { Dish, DishCategory, DishTag, Extra, FreeMode, Nutrition, PackSize, PromoKind, Settings } from "@/lib/types";
+import NumberInput from "@/components/admin/NumberInput";
 
 // Available / sold out switch. Sold-out items stay on the site, greyed and
 // unselectable, so customers see what exists this week.
@@ -625,7 +626,7 @@ export default function MenuTab() {
               </label>
               <label style={{ flex: "0 1 110px", minWidth: 0 }}>
                 <span style={adminLabel}>Grams</span>
-                <input type="number" step="10" min="1" value={s.grams} onChange={(e) => editSize(s.id, { grams: Number(e.target.value) })} style={adminInput} />
+                <NumberInput step="10" min="1" value={s.grams} onChange={(n) => editSize(s.id, { grams: n })} />
               </label>
               <label style={{ flex: "1 1 140px", minWidth: 0 }}>
                 <span style={adminLabel}>Serves (shown under the name)</span>
@@ -633,11 +634,11 @@ export default function MenuTab() {
               </label>
               <label style={{ flex: "0 1 130px", minWidth: 0 }}>
                 <span style={adminLabel}>{CATEGORY_LABEL.classic} €</span>
-                <input type="number" step="0.5" min="0.5" value={s.price_classic} onChange={(e) => editSize(s.id, { price_classic: Number(e.target.value) })} style={adminInput} />
+                <NumberInput step="0.5" min="0.5" value={s.price_classic} onChange={(n) => editSize(s.id, { price_classic: n })} />
               </label>
               <label style={{ flex: "0 1 130px", minWidth: 0 }}>
                 <span style={adminLabel}>{CATEGORY_LABEL.chef} €</span>
-                <input type="number" step="0.5" min="0.5" value={s.price_chef} onChange={(e) => editSize(s.id, { price_chef: Number(e.target.value) })} style={adminInput} />
+                <NumberInput step="0.5" min="0.5" value={s.price_chef} onChange={(n) => editSize(s.id, { price_chef: n })} />
               </label>
             </div>
             <SaveRow busy={!!busy[s.id]} status={cardStatus[s.id] ?? null} onSave={() => saveSize(s)} onDelete={() => deleteSize(s)} />
@@ -711,63 +712,28 @@ export default function MenuTab() {
                 {freeMode(x) === "per_order" && (
                   <label style={{ flex: "0 1 120px", minWidth: 0 }}>
                     <span style={adminLabel}>Free per order</span>
-                    <input
-                      type="number"
-                      step="1"
-                      min="1"
-                      value={x.free_per_order ?? 0}
-                      onChange={(e) => editExtra(x.id, { free_per_order: Number(e.target.value) })}
-                      style={adminInput}
-                    />
+                    <NumberInput step="1" min="1" value={x.free_per_order} onChange={(n) => editExtra(x.id, { free_per_order: n })} />
                   </label>
                 )}
                 {freeMode(x) === "per_pack" && (
                   <>
                     <label style={{ flex: "0 1 120px", minWidth: 0 }}>
                       <span style={adminLabel}>Free per pack</span>
-                      <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        value={x.free_per_pack ?? 0}
-                        onChange={(e) => editExtra(x.id, { free_per_pack: Number(e.target.value) })}
-                        style={adminInput}
-                      />
+                      <NumberInput step="1" min="1" value={x.free_per_pack} onChange={(n) => editExtra(x.id, { free_per_pack: n })} />
                     </label>
                     <label style={{ flex: "0 1 130px", minWidth: 0 }}>
                       <span style={adminLabel}>Max free (0 = no cap)</span>
-                      <input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={x.max_free ?? 0}
-                        onChange={(e) => editExtra(x.id, { max_free: Number(e.target.value) })}
-                        style={adminInput}
-                      />
+                      <NumberInput step="1" min="0" value={x.max_free} onChange={(n) => editExtra(x.id, { max_free: n })} />
                     </label>
                   </>
                 )}
                 <label style={{ flex: "0 1 110px", minWidth: 0 }}>
                   <span style={adminLabel}>Then € each</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    value={x.price}
-                    onChange={(e) => editExtra(x.id, { price: Number(e.target.value) })}
-                    style={adminInput}
-                  />
+                  <NumberInput step="0.5" min="0" value={x.price} onChange={(n) => editExtra(x.id, { price: n })} />
                 </label>
                 <label style={{ flex: "0 1 130px", minWidth: 0 }}>
                   <span style={adminLabel}>Max per order</span>
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
-                    value={x.max_qty}
-                    onChange={(e) => editExtra(x.id, { max_qty: Number(e.target.value) })}
-                    style={adminInput}
-                  />
+                  <NumberInput step="1" min="1" value={x.max_qty} onChange={(n) => editExtra(x.id, { max_qty: n })} />
                 </label>
               </div>
               <label style={{ display: "block", marginTop: 10 }}>
@@ -788,37 +754,16 @@ export default function MenuTab() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label style={{ display: "block" }}>
               <span style={adminLabel}>Order fee €</span>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                value={settings.order_fee}
-                onChange={(e) => setSettings({ ...settings, order_fee: Number(e.target.value) })}
-                style={adminInput}
-              />
+              <NumberInput step="0.5" min="0" value={settings.order_fee} onChange={(n) => setSettings({ ...settings, order_fee: n })} />
             </label>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <label style={{ display: "block", flex: "1 1 180px" }}>
                 <span style={adminLabel}>Max packs per order (0 = no limit)</span>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={settings.max_packs}
-                  onChange={(e) => setSettings({ ...settings, max_packs: Number(e.target.value) })}
-                  style={adminInput}
-                />
+                <NumberInput step="1" min="0" value={settings.max_packs} onChange={(n) => setSettings({ ...settings, max_packs: n })} />
               </label>
               <label style={{ display: "block", flex: "1 1 180px" }}>
                 <span style={adminLabel}>Max sides per order (0 = no limit)</span>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={settings.max_extras ?? 10}
-                  onChange={(e) => setSettings({ ...settings, max_extras: Number(e.target.value) })}
-                  style={adminInput}
-                />
+                <NumberInput step="1" min="0" value={settings.max_extras ?? 10} onChange={(n) => setSettings({ ...settings, max_extras: n })} />
               </label>
             </div>
 
@@ -827,26 +772,16 @@ export default function MenuTab() {
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <label style={{ display: "block", flex: "1 1 160px" }}>
                   <span style={adminLabel}>More than … grams</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     step="100"
                     min="0"
-                    value={settings.discount_threshold_grams ?? 0}
-                    onChange={(e) => setSettings({ ...settings, discount_threshold_grams: Number(e.target.value) })}
-                    style={adminInput}
+                    value={settings.discount_threshold_grams}
+                    onChange={(n) => setSettings({ ...settings, discount_threshold_grams: n })}
                   />
                 </label>
                 <label style={{ display: "block", flex: "1 1 120px" }}>
                   <span style={adminLabel}>Discount % (0 = off)</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="100"
-                    value={settings.discount_pct ?? 0}
-                    onChange={(e) => setSettings({ ...settings, discount_pct: Number(e.target.value) })}
-                    style={adminInput}
-                  />
+                  <NumberInput step="0.5" min="0" max="100" value={settings.discount_pct} onChange={(n) => setSettings({ ...settings, discount_pct: n })} />
                 </label>
               </div>
               <label style={{ display: "block", marginTop: 10 }}>
@@ -887,17 +822,12 @@ export default function MenuTab() {
                 </label>
                 <label style={{ display: "block", flex: "1 1 120px" }}>
                   <span style={adminLabel}>{settings.promo_kind === "amount" ? "Amount (€)" : "Percent (%)"}</span>
-                  <input
-                    type="number"
+                  <NumberInput
                     step={settings.promo_kind === "amount" ? "0.5" : "1"}
                     min="0"
                     max={settings.promo_kind === "amount" ? undefined : "100"}
-                    placeholder="0"
-                    // Empty instead of a stuck "0", so typing 10 gives 10, not 010.
-                    value={settings.promo_value ? settings.promo_value : ""}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setSettings({ ...settings, promo_value: e.target.value === "" ? 0 : Number(e.target.value) })}
-                    style={adminInput}
+                    value={settings.promo_value}
+                    onChange={(n) => setSettings({ ...settings, promo_value: n })}
                   />
                 </label>
               </div>
