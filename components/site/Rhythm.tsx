@@ -1,3 +1,4 @@
+import { DEFAULT_STORAGE_NOTE } from "@/lib/types";
 import type { Settings } from "@/lib/types";
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -85,8 +86,11 @@ function buildWeek(settings: Settings) {
   });
 }
 
+const storageNoteOf = (settings: Settings) => (settings.storage_note ?? "").trim() || DEFAULT_STORAGE_NOTE;
+
 function buildPhases(settings: Settings) {
   const s = (d: string) => SHORT[d as keyof typeof SHORT] ?? d;
+  const storageNote = storageNoteOf(settings);
   const deliveryDays = settings.delivery_days;
   const firstDelivery = deliveryDays[0] ?? settings.cook_day;
   const lastDelivery = deliveryDays[deliveryDays.length - 1] ?? settings.cook_day;
@@ -116,7 +120,7 @@ function buildPhases(settings: Settings) {
       num: "03",
       short: firstDelivery === lastDelivery ? s(firstDelivery) : `${s(firstDelivery)} → ${s(lastDelivery)}`,
       title: `Delivered ${deliveredRange}`,
-      note: `Choose your day at checkout. Evenings, ${settings.delivery_window}, ${settings.delivery_area}. Meals arrive portioned and sealed with reheating notes — fridge for 4 days, freezer for a month.`,
+      note: `Choose your day at checkout. Evenings, ${settings.delivery_window}, ${settings.delivery_area}. Meals arrive portioned and sealed with reheating notes — ${storageNote}.`,
       bg: "#7fae86",
       fg: "#1e3a25",
       accent: "#1e3a25",
@@ -125,6 +129,7 @@ function buildPhases(settings: Settings) {
 }
 
 export default function Rhythm({ settings }: { settings: Settings }) {
+  const storageNote = storageNoteOf(settings);
   const week = buildWeek(settings);
   const phases = buildPhases(settings);
   const deliveryDays = settings.delivery_days;
@@ -290,7 +295,7 @@ export default function Rhythm({ settings }: { settings: Settings }) {
             </h3>
             <p style={{ fontSize: 14.5, lineHeight: 1.65, color: "#e0cdb8", margin: 0 }}>
               Choose your day at checkout. Meals arrive portioned and sealed with reheating notes
-              — fridge for 4 days, freezer for a month.
+              — {storageNote}.
             </p>
           </div>
         </div>

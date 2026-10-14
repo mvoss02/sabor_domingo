@@ -166,7 +166,13 @@ def _schedule_sentence(order: dict, html: bool = False) -> str:
     return f"We deliver on {deliver_s}."
 
 
-def send_order_emails(order: dict, items: list[dict]) -> None:
+DEFAULT_STORAGE_NOTE = "fridge for 3 days, freezer for a month"
+
+
+def send_order_emails(order: dict, items: list[dict], storage_note: str | None = None) -> None:
+    # The kitchen's "how long it keeps" sentence from settings.storage_note;
+    # the default keeps the email whole if the settings read failed.
+    storage_note = (storage_note or "").strip() or DEFAULT_STORAGE_NOTE
     ref = f"#SD-{order['ref_num']}"
 
     _send(
@@ -177,7 +183,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f"\n\nYour pack:\n{_items_text(items)}\n\n"
             f"{_totals_text(order)}\n\n"
             "Everything arrives chilled and portioned with reheating notes — "
-            "fridge for 4 days, freezer for a month.\n\n"
+            f"{storage_note}.\n\n"
             "Un apapacho,\nMaca & Clau"
         ),
         to=[order["email"]],
@@ -189,7 +195,7 @@ def send_order_emails(order: dict, items: list[dict]) -> None:
             f'{_items_html(items)}'
             f'{_totals_html(order)}'
             f'<p style="margin:18px 0 0;font-size:13.5px;color:#6a4a3f;">Everything arrives chilled and portioned '
-            f'with reheating notes &mdash; fridge for 4 days, freezer for a month.</p>'
+            f'with reheating notes &mdash; {_esc(storage_note)}.</p>'
             f'<p style="margin:14px 0 0;font-family:Georgia,serif;font-size:17px;color:#c8492a;">Un apapacho,<br>Maca &amp; Clau</p>'
         ),
     )
