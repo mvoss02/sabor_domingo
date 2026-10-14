@@ -809,27 +809,30 @@ export default function MenuTab() {
             </div>
 
             <div style={{ borderTop: "1px solid #ece0cb", paddingTop: 12 }}>
-              <span style={{ ...adminLabel, color: "#5e1d22" }}>
-                Promotion · stacks after the quantity discount. Percent comes off the guisos; a euro amount comes off the whole order, never the fee
-              </span>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto", paddingBottom: 9, cursor: "pointer" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ ...adminLabel, color: "#5e1d22", margin: 0 }}>Promotion</span>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                   <input
                     type="checkbox"
                     checked={!!settings.promo_active}
                     onChange={(e) => setSettings({ ...settings, promo_active: e.target.checked })}
                   />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#5e1d22" }}>Promotion on</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#5e1d22" }}>{settings.promo_active ? "On" : "Off"}</span>
                 </label>
-                <label style={{ display: "block", flex: "1 1 140px" }}>
+              </div>
+              <p style={{ fontSize: 12.5, color: "#a1806f", lineHeight: 1.5, margin: "4px 0 12px" }}>
+                Stacks after the quantity discount. Percent comes off the guisos; a euro amount comes off the whole order, never the fee.
+              </p>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <label style={{ display: "block", flex: "2 1 200px" }}>
                   <span style={adminLabel}>Type</span>
                   <select
                     value={settings.promo_kind ?? "percent"}
                     onChange={(e) => setSettings({ ...settings, promo_kind: e.target.value as PromoKind })}
                     style={adminInput}
                   >
-                    <option value="percent">Percent off the guisos</option>
-                    <option value="amount">Euro amount off the order</option>
+                    <option value="percent">Percent off guisos</option>
+                    <option value="amount">Euros off the order</option>
                   </select>
                 </label>
                 <label style={{ display: "block", flex: "1 1 120px" }}>
@@ -839,8 +842,11 @@ export default function MenuTab() {
                     step={settings.promo_kind === "amount" ? "0.5" : "1"}
                     min="0"
                     max={settings.promo_kind === "amount" ? undefined : "100"}
-                    value={settings.promo_value ?? 0}
-                    onChange={(e) => setSettings({ ...settings, promo_value: Number(e.target.value) })}
+                    placeholder="0"
+                    // Empty instead of a stuck "0", so typing 10 gives 10, not 010.
+                    value={settings.promo_value ? settings.promo_value : ""}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setSettings({ ...settings, promo_value: e.target.value === "" ? 0 : Number(e.target.value) })}
                     style={adminInput}
                   />
                 </label>
