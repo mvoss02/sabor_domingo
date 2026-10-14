@@ -35,6 +35,59 @@ function SoldOutToggle({ available, onChange }: { available: boolean; onChange: 
   );
 }
 
+// On/off switch: a pill track with a sliding knob, so the state reads at a
+// glance (green = on, grey = off) instead of a bare checkbox.
+function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={() => onChange(!on)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 10,
+        padding: 0,
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: "relative",
+          width: 44,
+          height: 26,
+          borderRadius: 999,
+          background: on ? "#2e6b3e" : "#d9c7b2",
+          transition: "background 150ms ease",
+          flex: "0 0 auto",
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 3,
+            left: on ? 21 : 3,
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#fdf6e8",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.25)",
+            transition: "left 150ms ease",
+          }}
+        />
+      </span>
+      <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: on ? "#2e6b3e" : "#a1806f" }}>
+        {on ? "On" : "Off"}
+      </span>
+    </button>
+  );
+}
+
 function PillSwitch<T extends string>({
   value,
   options,
@@ -811,14 +864,11 @@ export default function MenuTab() {
             <div style={{ borderTop: "1px solid #ece0cb", paddingTop: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <span style={{ ...adminLabel, color: "#5e1d22", margin: 0 }}>Promotion</span>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={!!settings.promo_active}
-                    onChange={(e) => setSettings({ ...settings, promo_active: e.target.checked })}
-                  />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#5e1d22" }}>{settings.promo_active ? "On" : "Off"}</span>
-                </label>
+                <Switch
+                  on={!!settings.promo_active}
+                  onChange={(v) => setSettings({ ...settings, promo_active: v })}
+                  label="Promotion"
+                />
               </div>
               <p style={{ fontSize: 12.5, color: "#a1806f", lineHeight: 1.5, margin: "4px 0 12px" }}>
                 Stacks after the quantity discount. Percent comes off the guisos; a euro amount comes off the whole order, never the fee.
