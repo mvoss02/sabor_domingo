@@ -301,6 +301,28 @@ export default function PackBuilder({
             . Mix and match{maxPacks > 0 ? ` up to ${maxPacks} packs` : " as many as you like"}; sides ride along.
           </p>
 
+          {promoOn && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "6px 12px",
+                background: "#f2a63b",
+                color: "#5e1d22",
+                borderRadius: 12,
+                padding: "12px 16px",
+                margin: "0 0 18px",
+              }}
+            >
+              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.75 }}>Promo</span>
+              <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>{settings.promo_text?.trim() || promoLabel}</span>
+              {promo > 0 && (
+                <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>−{eur(promo)} applied</span>
+              )}
+            </div>
+          )}
+
           <div
             style={{
               display: "flex",
@@ -468,27 +490,6 @@ export default function PackBuilder({
             <p style={{ fontSize: 13, color: discountEarned ? "#2e6b3e" : "#a1806f", fontWeight: 600, margin: "-8px 0 0" }}>
               {discountEarned ? `${discountPct}% off applied · ${weight(totalGrams)} of guisos` : settings.discount_hint}
             </p>
-          )}
-          {promoOn && (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: "6px 12px",
-                background: "#f2a63b",
-                color: "#5e1d22",
-                borderRadius: 12,
-                padding: "12px 16px",
-                margin: discountOn && settings.discount_hint ? "4px 0 0" : "-4px 0 0",
-              }}
-            >
-              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.75 }}>Promo</span>
-              <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>{settings.promo_text?.trim() || promoLabel}</span>
-              {promo > 0 && (
-                <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>−{eur(promo)} applied</span>
-              )}
-            </div>
           )}
 
           {extrasAvailableCount > 0 && (
