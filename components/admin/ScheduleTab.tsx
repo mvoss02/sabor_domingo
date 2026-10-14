@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { adminButton, adminCard, adminChip, adminInput, adminLabel } from "@/components/admin/ui";
 import { DAY_ORDER } from "@/lib/window";
+import { DEFAULT_STORAGE_NOTE } from "@/lib/types";
 import type { Settings } from "@/lib/types";
 
 const OVERRIDES = [
@@ -60,6 +61,7 @@ export default function ScheduleTab() {
         delivery_area: s.delivery_area,
         window_override: s.window_override,
         closed_message: s.closed_message,
+        storage_note: (s.storage_note ?? "").trim() || DEFAULT_STORAGE_NOTE,
       })
       .eq("id", 1);
     setStatus(error ? `Error: ${error.message}` : "Schedule saved · the site follows within a minute");
@@ -127,6 +129,20 @@ export default function ScheduleTab() {
               <span style={{ display: "block", fontSize: 11.5, color: "#a1806f", marginTop: 4, lineHeight: 1.5 }}>
                 Shown instead of &ldquo;Orders closed — back {s.open_day}&rdquo; whenever ordering is
                 closed. Leave empty for the automatic text.
+              </span>
+            </label>
+            <label style={{ display: "block" }}>
+              <span style={adminLabel}>How long the food keeps</span>
+              <input
+                type="text"
+                value={s.storage_note ?? ""}
+                onChange={(e) => setS({ ...s, storage_note: e.target.value })}
+                placeholder={DEFAULT_STORAGE_NOTE}
+                style={adminInput}
+              />
+              <span style={{ display: "block", fontSize: 11.5, color: "#a1806f", marginTop: 4, lineHeight: 1.5 }}>
+                Finishes the sentence &ldquo;Meals arrive portioned and sealed with reheating notes — …&rdquo; on the
+                weekly rhythm, the order-confirmed page and the confirmation email.
               </span>
             </label>
             <label style={{ display: "block" }}>

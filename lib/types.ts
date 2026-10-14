@@ -107,7 +107,11 @@ export interface Settings {
   delivery_area: string;
   window_override: "auto" | "open" | "closed";
   closed_message: string;
+  /** "fridge for 3 days, freezer for a month": rhythm, confirmed page, email. */
+  storage_note: string;
 }
+
+export const DEFAULT_STORAGE_NOTE = "fridge for 3 days, freezer for a month";
 
 export interface Extra {
   id: string;

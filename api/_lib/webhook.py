@@ -4,7 +4,15 @@ from api._lib.db import get_client
 def on_order_paid(order: dict, items: list[dict]) -> None:
     from api._lib.emails import send_order_emails
     try:
-        send_order_emails(order, items)
+        # The storage note is the kitchen's wording; a failed read falls back
+        # to the default inside send_order_emails rather than losing the email.
+        storage_note = None
+        try:
+            row = get_client().table("settings").select("storage_note").eq("id", 1).execute().data
+            storage_note = row[0].get("storage_note") if row else None
+        except Exception as e:
+            print(f"settings read failed for order {order.get('id')}: {e}")
+        send_order_emails(order, items, storage_note=storage_note)
     except Exception as e:  # email must never fail the webhook
         print(f"email send failed for order {order.get('id')}: {e}")
 

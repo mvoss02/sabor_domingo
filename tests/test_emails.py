@@ -146,3 +146,20 @@ def test_discount_line_only_when_granted(monkeypatch):
         html = send.call_args_list[2].kwargs["html"]
     assert "Discount: −€2.66" in text and "Total: €86.84" in text
     assert "&minus;&euro;2.66" in html
+
+
+def test_storage_note_comes_from_settings_with_a_default(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
+    with patch.object(emails, "_send") as send:
+        emails.send_order_emails(ORDER, ITEMS, storage_note="fridge for 2 days, freezer for a month")
+        customer = send.call_args_list[0].kwargs
+        assert "fridge for 2 days, freezer for a month." in customer["text"]
+        assert "fridge for 2 days, freezer for a month." in customer["html"]
+    with patch.object(emails, "_send") as send:
+        emails.send_order_emails(ORDER, ITEMS)  # settings read failed or column missing
+        assert emails.DEFAULT_STORAGE_NOTE + "." in send.call_args_list[0].kwargs["text"]
+    with patch.object(emails, "_send") as send:
+        emails.send_order_emails(ORDER, ITEMS, storage_note="   ")  # blank in admin
+        assert emails.DEFAULT_STORAGE_NOTE + "." in send.call_args_list[0].kwargs["text"]
