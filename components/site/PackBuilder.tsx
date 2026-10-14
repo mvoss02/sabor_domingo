@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { imageUrl } from "@/lib/content";
+import LoadingImage from "@/components/site/LoadingImage";
 import { eur, isWindowOpen } from "@/lib/window";
 import { suggestEmail } from "@/lib/emailSuggest";
-import { CATEGORY_LABEL, DISH_CATEGORIES, freeUnits, priceFor } from "@/lib/types";
+import { CATEGORY_LABEL, DISH_CATEGORIES, freeUnits, priceFor, promoFor } from "@/lib/types";
 import type { Dish, DishTag, Extra, PackSize, Settings } from "@/lib/types";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -101,7 +102,12 @@ export default function PackBuilder({
   const discountOn = discountPct > 0;
   const discountEarned = discountOn && totalGrams > discountThreshold;
   const discount = discountEarned ? round2((packsSubtotal * discountPct) / 100) : 0;
-  const total = totalPacks > 0 ? subtotal - discount + settings.order_fee : 0;
+  // promotion: stacks after the grams discount; mirrors promo_for in api/_lib/pricing.py
+  const promoOn = !!settings.promo_active && Number(settings.promo_value) > 0;
+  const promo = totalPacks > 0 ? promoFor(packsSubtotal - discount, subtotal - discount, settings) : 0;
+  const promoLabel =
+    settings.promo_kind === "amount" ? `${eur(Number(settings.promo_value))} promotion` : `${Number(settings.promo_value)}% promotion`;
+  const total = totalPacks > 0 ? subtotal - discount - promo + settings.order_fee : 0;
   const packsLeft = maxPacks > 0 ? maxPacks - totalPacks : Infinity;
   const postalOk = /^\d{4}\s?[A-Za-z]{2}$/.test(form.postal_code.trim());
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim());
@@ -383,13 +389,7 @@ export default function PackBuilder({
                       {/* White box, whole photo: the dish shots come on a white background. */}
                       <div style={{ position: "relative", aspectRatio: "4 / 3", background: "#fff", overflow: "hidden" }}>
                         {img ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={img}
-                            alt={d.name}
-                            loading="lazy"
-                            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                          />
+                          <LoadingImage src={img} alt={d.name} fit="contain" lazy />
                         ) : (
                           <div
                             style={{
@@ -469,6 +469,12 @@ export default function PackBuilder({
               {discountEarned ? `${discountPct}% off applied · ${weight(totalGrams)} of guisos` : settings.discount_hint}
             </p>
           )}
+          {promoOn && (
+            <p style={{ fontSize: 13, color: "#b4761a", fontWeight: 600, margin: discountOn && settings.discount_hint ? "-4px 0 0" : "-8px 0 0" }}>
+              {settings.promo_text?.trim() || promoLabel}
+              {promo > 0 && <span style={{ color: "#2e6b3e" }}> · −{eur(promo)} applied</span>}
+            </p>
+          )}
 
           {extrasAvailableCount > 0 && (
             <>
@@ -534,47 +540,45 @@ export default function PackBuilder({
                       style={{
                         background: "#fdf6e8",
                         borderRadius: 14,
-                        padding: "14px 12px 12px",
+                        overflow: "hidden",
                         display: "flex",
                         flexDirection: "column",
-                        alignItems: "center",
-                        textAlign: "center",
-                        gap: 4,
                         border: qty > 0 ? "2px solid #c8492a" : "2px solid transparent",
                         opacity: soldOut ? 0.5 : 1,
                         filter: soldOut ? "grayscale(1)" : "none",
                       }}
                     >
+                      {/* Same white photo box as the dish cards, only when a photo exists. */}
                       {img && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={img}
-                          alt={x.name}
-                          loading="lazy"
-                          style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", display: "block", marginBottom: 4 }}
-                        />
+                        <div style={{ aspectRatio: "4 / 3", background: "#fff" }}>
+                          <LoadingImage src={img} alt={x.name} fit="contain" lazy hintSize={10} />
+                        </div>
                       )}
-                      <span style={{ fontWeight: 700, fontSize: 15, color: "#5e1d22", lineHeight: 1.25 }}>{x.name}</span>
-                      {x.description && (
-                        <span style={{ fontSize: 12, lineHeight: 1.4, color: "#a1806f" }}>{x.description}</span>
-                      )}
-                      <span style={{ fontSize: price === 0 || (perPack === 0 && perOrder === 0) ? 15 : 12.5, fontWeight: 700, lineHeight: 1.35, color: free ? "#2e6b3e" : "#c8492a", margin: "2px 0 6px" }}>
-                        {priceText}
-                      </span>
-                      {soldOut ? (
-                        <SoldOutBadge />
-                      ) : (
-                        <Stepper
-                          qty={qty}
-                          onDec={() => addExtra(x, -1)}
-                          onInc={() => addExtra(x, 1)}
-                          disabled={false}
-                          decDisabled={qty === 0}
-                          incDisabled={atCap}
-                          incDimmed={atCap}
-                          label={x.name}
-                        />
-                      )}
+                      <div style={{ padding: "12px 12px 12px", display: "flex", flexDirection: "column", gap: 3, flex: "1 1 auto" }}>
+                        <span style={{ fontWeight: 700, fontSize: 15, color: "#5e1d22", lineHeight: 1.25 }}>{x.name}</span>
+                        {x.description && (
+                          <span style={{ fontSize: 12, lineHeight: 1.4, color: "#a1806f" }}>{x.description}</span>
+                        )}
+                        {/* Price sits right above the stepper so every card ends the same way. */}
+                        <span style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.35, color: free ? "#2e6b3e" : "#c8492a", margin: "auto 0 8px", paddingTop: 8 }}>
+                          {priceText}
+                        </span>
+                        {soldOut ? (
+                          <SoldOutBadge />
+                        ) : (
+                          <Stepper
+                            qty={qty}
+                            onDec={() => addExtra(x, -1)}
+                            onInc={() => addExtra(x, 1)}
+                            disabled={false}
+                            decDisabled={qty === 0}
+                            incDisabled={atCap}
+                            incDimmed={atCap}
+                            compact
+                            label={x.name}
+                          />
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -654,6 +658,12 @@ export default function PackBuilder({
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, color: "#7fae86", fontWeight: 600, marginBottom: 6 }}>
                   <span>{discountPct}% off over {weight(discountThreshold)}</span>
                   <span>−{eur(discount)}</span>
+                </div>
+              )}
+              {promo > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13.5, color: "#f2a63b", fontWeight: 600, marginBottom: 6 }}>
+                  <span style={{ minWidth: 0 }}>{settings.promo_text?.trim() || promoLabel}</span>
+                  <span style={{ whiteSpace: "nowrap" }}>−{eur(promo)}</span>
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, color: "#e0cdb8", marginBottom: 12 }}>
@@ -909,6 +919,7 @@ function Stepper({
   decDisabled = false,
   incDisabled = false,
   incDimmed = false,
+  compact = false,
   label,
 }: {
   qty: number;
@@ -918,14 +929,17 @@ function Stepper({
   decDisabled?: boolean;
   incDisabled?: boolean;
   incDimmed?: boolean;
+  /** Smaller buttons for add-on tiles, so sides weigh less than the guisos. */
+  compact?: boolean;
   label: string;
 }) {
+  const size = compact ? 30 : 36;
   const btn: React.CSSProperties = {
-    width: 36,
-    height: 36,
+    width: size,
+    height: size,
     borderRadius: "50%",
     border: "none",
-    fontSize: 20,
+    fontSize: compact ? 17 : 20,
     fontWeight: 500,
     cursor: "pointer",
     lineHeight: 1,
@@ -945,7 +959,7 @@ function Stepper({
       >
         –
       </button>
-      <span className="sd-qty-count" style={{ minWidth: 22, textAlign: "center", fontWeight: 700, fontSize: 15, color: "#5e1d22" }}>
+      <span className="sd-qty-count" style={{ minWidth: 22, textAlign: "center", fontWeight: 700, fontSize: compact ? 14 : 15, color: "#5e1d22" }}>
         {qty}
       </span>
       <button

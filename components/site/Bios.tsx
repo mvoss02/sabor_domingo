@@ -1,4 +1,5 @@
 import { imageUrl } from "@/lib/content";
+import LoadingImage from "@/components/site/LoadingImage";
 import type { ImageSlots } from "@/lib/types";
 
 const BIOS = [
@@ -93,12 +94,7 @@ export default function Bios({ images }: { images: ImageSlots }) {
                 position: "relative",
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={clauImg}
-                alt="Clau"
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              />
+              <LoadingImage src={clauImg} alt="Clau" />
             </div>
             <div
               style={{
@@ -111,12 +107,7 @@ export default function Bios({ images }: { images: ImageSlots }) {
                 marginTop: 26,
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={macaImg}
-                alt="Maca"
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              />
+              <LoadingImage src={macaImg} alt="Maca" />
             </div>
           </div>
         </div>
