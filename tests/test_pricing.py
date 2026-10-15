@@ -270,3 +270,29 @@ def test_promo_off_when_inactive_or_zero_or_missing():
     assert promo_for(10000, 12000, {**PROMO_PCT, "promo_value": 0}) == 0
     assert promo_for(10000, 12000, {}) == 0
     assert promo_for(1050, 1050, {"promo_active": True, "promo_kind": "percent", "promo_value": 5}) == 53  # 52.5 → 53
+
+
+# --- minimum order --------------------------------------------------------------
+# On the list-price subtotal (guisos + paid sides), before discounts, no fee.
+
+def test_min_order_compares_list_price_subtotal_without_fee():
+    extras = [{"id": "x1", "name": "Salsa roja", "price": 5.5, "included": False, "max_qty": 5, "available": True}]
+    s = {**SETTINGS, "min_order": 19}
+    # 13.50 of guisos alone is under 19, even though fee would push the total over
+    with pytest.raises(CartError, match="Minimum order is €19.00"):
+        price_order([line("d2", "s400")], DISHES, s, sizes=SIZES)
+    # 13.50 + 5.50 of paid sides = 19.00 passes (not strictly above)
+    t = price_order([line("d2", "s400"), {"extra_id": "x1", "qty": 1}], DISHES, s, extras, SIZES)
+    assert t.subtotal_cents == 1900
+
+
+def test_min_order_ignores_discounts_and_is_off_at_zero():
+    # 3 × 29.50 = 88.50 list price; a 10% promo drops it to 79.65 but the
+    # minimum looks at the list price, so 85 still passes
+    s = {**SETTINGS, "min_order": 85, "promo_active": True, "promo_kind": "percent", "promo_value": 10}
+    t = price_order([line("d1", "s750", 3)], DISHES, s, sizes=SIZES)
+    assert t.promo_cents == 885
+    assert t.subtotal_cents - t.promo_cents < 8500
+    # 0 and missing both mean off
+    price_order([line("d2", "s400")], DISHES, {**SETTINGS, "min_order": 0}, sizes=SIZES)
+    price_order([line("d2", "s400")], DISHES, SETTINGS, sizes=SIZES)

@@ -151,6 +151,12 @@ def price_order(lines: list[dict], dishes: list[dict], settings: dict,
 
     packs_cents = sum(i.unit_price_cents * i.qty for i in items if i.kind == "pack")
     subtotal = sum(i.unit_price_cents * i.qty for i in items)
+    # Minimum order: on the list-price subtotal (guisos + paid sides), before
+    # any discount and without the fee. 0 = off. The card greys the button
+    # out for the same rule; this is the check that cannot be bypassed.
+    min_order = _cents(settings.get("min_order") or 0)
+    if min_order and subtotal < min_order:
+        raise CartError(f"Minimum order is €{min_order / 100:.2f}.")
     discount = discount_for(packs_cents, grams, settings)
     promo = promo_for(packs_cents - discount, subtotal - discount, settings)
     fee = _cents(settings["order_fee"])
