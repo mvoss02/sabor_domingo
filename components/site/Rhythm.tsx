@@ -102,7 +102,7 @@ function buildPhases(settings: Settings) {
       num: "01",
       short: `${s(settings.open_day)} → ${s(settings.close_day)}`,
       title: `You order ${settings.open_day} → ${settings.close_day}`,
-      note: `Pick your guisos in El Chico or El Grande, add sides, pay by card. The list closes ${settings.close_day} at ${cutoff} and opens again ${settings.open_day} morning.`,
+      note: `Pick your main dishes in El Chico or El Grande, add sides, pay by card. The list closes ${settings.close_day} at ${cutoff} and opens again ${settings.open_day} morning.`,
       bg: "#ece0cb",
       fg: "#3d1f18",
       accent: "#c8492a",
@@ -269,7 +269,7 @@ export default function Rhythm({ settings }: { settings: Settings }) {
               You order {settings.open_day} → {settings.close_day}
             </h3>
             <p style={{ fontSize: 14.5, lineHeight: 1.65, color: "#e0cdb8", margin: 0 }}>
-              Pick your guisos in El Chico or El Grande, add sides, pay by card. The list closes{" "}
+              Pick your main dishes in El Chico or El Grande, add sides, pay by card. The list closes{" "}
               {settings.close_day} at {String(settings.cutoff_time).slice(0, 5)} and opens again{" "}
               {settings.open_day} morning.
             </p>

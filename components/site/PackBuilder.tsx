@@ -312,7 +312,7 @@ export default function PackBuilder({
             Build your meal pack
           </h2>
           <p style={{ fontSize: 15.5, color: "#6a4a3f", maxWidth: "56ch", margin: "0 0 30px", lineHeight: 1.65 }}>
-            Every guiso comes in two sizes
+            Every main dish comes in two sizes
             {smallSize && largeSize && (
               <>
                 : <strong>{smallSize.name}</strong> ({weight(smallSize.grams)}
@@ -365,7 +365,7 @@ export default function PackBuilder({
                 margin: 0,
               }}
             >
-              1 · Choose your guisos
+              1 · Choose your main dishes
             </h3>
             {maxPacks > 0 && (
               <span style={{ fontSize: 12.5, fontWeight: 600, color: "#c8492a" }}>
@@ -510,7 +510,7 @@ export default function PackBuilder({
           ))}
           {discountOn && settings.discount_hint && (
             <p style={{ fontSize: 13, color: discountEarned ? "#2e6b3e" : "#a1806f", fontWeight: 600, margin: "-8px 0 0" }}>
-              {discountEarned ? `${discountPct}% off applied · ${weight(totalGrams)} of guisos` : settings.discount_hint}
+              {discountEarned ? `${discountPct}% off applied · ${weight(totalGrams)} of main dishes` : settings.discount_hint}
             </p>
           )}
 
@@ -661,8 +661,8 @@ export default function PackBuilder({
             <p style={{ fontSize: 14, color: "#e0cdb8", lineHeight: 1.6, margin: "0 0 18px" }}>
               Nothing yet.{" "}
               {smallSize && largeSize
-                ? `Most people start with one ${largeSize.name}, or two ${smallSize.name} to try two guisos.`
-                : "Pick a guiso to get started."}
+                ? `Most people start with one ${largeSize.name}, or two ${smallSize.name} to try two main dishes.`
+                : "Pick a main dish to get started."}
             </p>
           ) : (
             <div>
@@ -689,7 +689,7 @@ export default function PackBuilder({
                 ))}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, color: "#e0cdb8", marginBottom: 6 }}>
-                <span>Subtotal · {weight(totalGrams)} of guisos</span>
+                <span>Subtotal · {weight(totalGrams)} of main dishes</span>
                 <span>{eur(subtotal)}</span>
               </div>
               {discount > 0 && (
@@ -907,19 +907,19 @@ export default function PackBuilder({
                 : !windowOpen
                   ? "Orders are closed"
                   : totalPacks === 0
-                    ? "Add a guiso to check out"
+                    ? "Add a main dish to check out"
                     : underMin
                       ? `Minimum order ${eur(minOrder)}`
                       : `Pay ${eur(total)} — secured by Stripe`}
             </button>
             {windowOpen && totalPacks === 0 && totalExtras > 0 && (
               <p style={{ fontSize: 13, color: "#f2a63b", fontWeight: 600, lineHeight: 1.5, margin: 0, textAlign: "center" }}>
-                Sides ride along with a pack — pick at least one guiso.
+                Sides ride along with a pack — pick at least one main dish.
               </p>
             )}
             {underMin && (
               <p style={{ fontSize: 13, color: "#f2a63b", fontWeight: 600, lineHeight: 1.5, margin: 0, textAlign: "center" }}>
-                Add {eur(minOrder - subtotal)} more of guisos or sides to check out.
+                Add {eur(minOrder - subtotal)} more of main dishes or sides to check out.
               </p>
             )}
             {tried && missingFields.length > 0 && (

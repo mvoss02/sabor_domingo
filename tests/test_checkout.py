@@ -223,7 +223,7 @@ def test_extras_only_cart_400(monkeypatch):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
     resp, _, _ = post({**VALID_BODY, "lines": [{"extra_id": "x1", "qty": 1}]}, OPEN_NOW)
     assert resp.status_code == 400
-    assert "at least one guiso" in resp.json()["detail"]
+    assert "at least one main dish" in resp.json()["detail"]
 
 
 def test_promo_and_grams_discount_share_one_stripe_coupon(monkeypatch):

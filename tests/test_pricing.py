@@ -201,7 +201,7 @@ def test_free_units_count_packs_listed_after_the_side():
 
 
 def test_extras_without_a_pack_rejected():
-    with pytest.raises(CartError, match="at least one guiso"):
+    with pytest.raises(CartError, match="at least one main dish"):
         price_order([{"extra_id": "x1", "qty": 1}], DISHES, SETTINGS, EXTRAS, SIZES)
 
 

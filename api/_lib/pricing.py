@@ -139,7 +139,7 @@ def price_order(lines: list[dict], dishes: list[dict], settings: dict,
             items.append(Item(extra["id"], extra["name"], None, qty - free, _cents(extra["price"]), kind="extra"))
 
     if total_packs == 0:
-        raise CartError("Add at least one guiso — sides come along with a pack.")
+        raise CartError("Add at least one main dish — sides come along with a pack.")
     # A cap of 0 means no limit per order.
     max_packs = int(settings["max_packs"])
     if max_packs and total_packs > max_packs:

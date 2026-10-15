@@ -111,7 +111,7 @@ def create_checkout(payload: CheckoutPayload) -> str:
         if off_cents > 0:
             names = []
             if totals.discount_cents > 0:
-                names.append(f"{settings.get('discount_pct')}% guisos discount")
+                names.append(f"{settings.get('discount_pct')}% main dish discount")
             if totals.promo_cents > 0:
                 names.append("promotion")
             coupon = stripe.Coupon.create(
