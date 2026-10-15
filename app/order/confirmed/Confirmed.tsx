@@ -24,7 +24,7 @@ const card: React.CSSProperties = {
   color: "#5e1d22",
 };
 
-export default function Confirmed({ storageNote, cookDay }: { storageNote: string; cookDay: string }) {
+export default function Confirmed({ storageNote }: { storageNote: string }) {
   const sessionId = useSearchParams().get("session_id");
   const [order, setOrder] = useState<OrderStatus | null>(null);
   const [state, setState] = useState<"loading" | "paid" | "cancelled" | "pending" | "error">(
@@ -82,8 +82,8 @@ export default function Confirmed({ storageNote, cookDay }: { storageNote: strin
             Order <strong>{order.ref}</strong> · delivery {order.delivery_day} evening · {eur(order.total)}
           </p>
           <p style={{ fontSize: 14, lineHeight: 1.65, margin: "0 0 8px", color: "#6a4a3f" }}>
-            We confirm your dishes by email on {cookDay} morning, after the market. Everything arrives
-            chilled and portioned with reheating notes — {storageNote}.
+            We confirm your order by email. Everything arrives chilled and portioned with reheating
+            notes — {storageNote}.
           </p>
           <Link href="/" style={{ display: "inline-block", marginTop: 18, fontWeight: 600, color: "#c8492a" }}>
             ← Back to Sabor Domingo

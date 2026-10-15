@@ -35,7 +35,7 @@ export default function Hero({
   const promoOn = !!settings.promo_active && promoValue > 0;
   const promoText =
     settings.promo_text?.trim() ||
-    (settings.promo_kind === "amount" ? `${eur(promoValue)} off your order` : `${promoValue}% off the guisos`);
+    (settings.promo_kind === "amount" ? `${eur(promoValue)} off your order` : `${promoValue}% off the main dishes`);
   const heroImg = imageUrl(images.hero) ?? "/img/hero.jpg";
 
   return (

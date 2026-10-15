@@ -800,7 +800,7 @@ export default function MenuTab() {
                 <input
                   type="text"
                   value={settings.discount_hint ?? ""}
-                  placeholder="Order more than 2 kg of guisos and get 3% off."
+                  placeholder="Order more than 2 kg of main dishes and get 3% off."
                   onChange={(e) => setSettings({ ...settings, discount_hint: e.target.value })}
                   style={adminInput}
                 />
@@ -827,7 +827,7 @@ export default function MenuTab() {
                     onChange={(e) => setSettings({ ...settings, promo_kind: e.target.value as PromoKind })}
                     style={adminInput}
                   >
-                    <option value="percent">Percent off guisos</option>
+                    <option value="percent">Percent off main dishes</option>
                     <option value="amount">Euros off the order</option>
                   </select>
                 </label>
@@ -847,7 +847,7 @@ export default function MenuTab() {
                 <input
                   type="text"
                   value={settings.promo_text ?? ""}
-                  placeholder={settings.promo_kind === "amount" ? "€5 off your order this week" : "10% off all guisos this week"}
+                  placeholder={settings.promo_kind === "amount" ? "€5 off your order this week" : "10% off all main dishes this week"}
                   onChange={(e) => setSettings({ ...settings, promo_text: e.target.value })}
                   style={adminInput}
                 />
