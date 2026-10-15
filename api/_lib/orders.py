@@ -3,7 +3,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import stripe
-from pydantic import BaseModel, EmailStr, Field
+import re
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from api._lib.config import env
 from api._lib.db import get_client
@@ -11,6 +13,7 @@ from api._lib.pricing import CartError, price_order
 from api._lib.window import cook_date_for, window_is_open
 
 AMS = ZoneInfo("Europe/Amsterdam")
+PHONE_RE = re.compile(r"^(\+[1-9]|00[1-9]|0[1-9])[0-9 \-()]{5,}$")
 
 
 class CartLine(BaseModel):
@@ -30,6 +33,24 @@ class CheckoutPayload(BaseModel):
     phone: str = Field(min_length=6, max_length=40)
     notes: str = Field(default="", max_length=1000)
     delivery_day: str
+
+    # Mirrors the browser's checks: the form is a courtesy, this is the rule.
+    @field_validator("name")
+    @classmethod
+    def _real_name(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("Please give us your name.")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def _dialable_phone(cls, v: str) -> str:
+        # starts like a real number: +31…, 0031…, or domestic 06… / 020…
+        v = v.strip()
+        if not PHONE_RE.match(v):
+            raise ValueError("Phone must start with +31, 0031 or 0 — like +31 6 12345678.")
+        return v
 
     @property
     def postal_normalized(self) -> str:

@@ -249,3 +249,22 @@ def test_promo_and_grams_discount_share_one_stripe_coupon(monkeypatch):
     assert coupon_kwargs["amount_off"] == grams_off + promo_off
     assert "promotion" in coupon_kwargs["name"]
     assert sc.call_args.kwargs["discounts"] == [{"coupon": "coupon_1"}]
+
+
+def test_junk_phone_and_blank_name_422(monkeypatch):
+    """The browser form checks these; the server must too, or a hand-made
+    request creates an order the kitchen cannot call back about."""
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    for phone in ["aaaaaa", "12345678", "+0 123456", "06 1"]:
+        resp, _, _ = post({**VALID_BODY, "phone": phone}, OPEN_NOW)
+        assert resp.status_code == 422, phone
+    for phone in ["+31 6 12345678", "0031612345678", "06 12345678", "020-1234567", "+49 (30) 123456"]:
+        resp, _, _ = post({**VALID_BODY, "phone": phone}, OPEN_NOW)
+        assert resp.status_code == 200, phone
+    for name in [" ", "A", "   B  "]:
+        resp, _, _ = post({**VALID_BODY, "name": name}, OPEN_NOW)
+        assert resp.status_code == 422, repr(name)
+    resp, _, db = post({**VALID_BODY, "name": "  Ana  "}, OPEN_NOW)
+    assert resp.status_code == 200
+    assert db.table("orders").insert.call_args.args[0]["name"] == "Ana"
