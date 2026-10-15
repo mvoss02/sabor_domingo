@@ -448,6 +448,7 @@ export default function MenuTab() {
   function saveRules() {
     if (!settings) return;
     if (settings.order_fee < 0) return note("rules", "Error: order fee can't be negative");
+    if ((settings.min_order ?? 0) < 0) return note("rules", "Error: the minimum order can't be negative");
     if (settings.max_packs < 0 || settings.max_extras < 0) return note("rules", "Error: limits can't be negative (0 = no limit)");
     if (settings.discount_pct < 0 || settings.discount_pct > 100) return note("rules", "Error: discount must be between 0 and 100%");
     if (settings.discount_threshold_grams < 0) return note("rules", "Error: the discount threshold can't be negative");
@@ -459,6 +460,7 @@ export default function MenuTab() {
         .from("settings")
         .update({
           order_fee: settings.order_fee,
+          min_order: settings.min_order ?? 0,
           max_packs: Math.round(settings.max_packs),
           max_extras: Math.round(settings.max_extras),
           discount_threshold_grams: Math.round(settings.discount_threshold_grams),
@@ -752,10 +754,19 @@ export default function MenuTab() {
         <div style={{ ...adminCard, maxWidth: 520 }}>
           <h2 style={{ fontWeight: 600, fontSize: 16, margin: "0 0 14px", color: "#c8492a" }}>Order rules</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <label style={{ display: "block" }}>
-              <span style={adminLabel}>Order fee €</span>
-              <NumberInput step="0.5" min="0" value={settings.order_fee} onChange={(n) => setSettings({ ...settings, order_fee: n })} />
-            </label>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <label style={{ display: "block", flex: "1 1 160px" }}>
+                <span style={adminLabel}>Order fee €</span>
+                <NumberInput step="0.5" min="0" value={settings.order_fee} onChange={(n) => setSettings({ ...settings, order_fee: n })} />
+              </label>
+              <label style={{ display: "block", flex: "1 1 160px" }}>
+                <span style={adminLabel}>Minimum order € (0 = none)</span>
+                <NumberInput step="0.5" min="0" value={settings.min_order} onChange={(n) => setSettings({ ...settings, min_order: n })} />
+                <span style={{ display: "block", fontSize: 11.5, color: "#a1806f", marginTop: 4, lineHeight: 1.5 }}>
+                  Guisos and sides at list price, before discounts, without the fee. Shown only on the order card when a cart is under it.
+                </span>
+              </label>
+            </div>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <label style={{ display: "block", flex: "1 1 180px" }}>
                 <span style={adminLabel}>Max packs per order (0 = no limit)</span>

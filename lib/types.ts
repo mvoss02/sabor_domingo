@@ -88,6 +88,8 @@ export function promoFor(packsAfterDiscount: number, orderAfterDiscount: number,
 
 export interface Settings {
   order_fee: number;
+  /** Minimum list-price subtotal (guisos + paid sides, before discounts, no fee). 0 = off. */
+  min_order: number;
   max_packs: number;
   max_extras: number;
   discount_threshold_grams: number;

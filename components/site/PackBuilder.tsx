@@ -115,7 +115,10 @@ export default function PackBuilder({
   const phoneOk = /^(\+[1-9]|00[1-9]|0[1-9])[0-9 \-()]{5,}$/.test(form.phone.trim());
   const emailSuggestion = emailOk ? suggestEmail(form.email.trim()) : null;
   const formComplete = form.name.trim() && emailOk && form.address.trim() && postalOk && phoneOk;
-  const canSubmit = windowOpen && totalPacks > 0 && !!formComplete && !submitting;
+  // minimum order: list-price subtotal (guisos + paid sides), before discounts, no fee; mirrors pricing.py
+  const minOrder = Number(settings.min_order ?? 0);
+  const underMin = minOrder > 0 && totalPacks > 0 && subtotal < minOrder;
+  const canSubmit = windowOpen && totalPacks > 0 && !underMin && !!formComplete && !submitting;
 
   // Dutch address autofill: postcode + house number -> street via PDOK Locatieserver
   // (free government geocoding API, no key). Failure just leaves manual typing.
@@ -882,17 +885,24 @@ export default function PackBuilder({
             >
               {submitting
                 ? "One moment…"
-                : totalPacks > 0
-                  ? `Pay ${eur(total)} — secured by Stripe`
-                  : "Pick your dishes first"}
+                : totalPacks === 0
+                  ? "Pick your dishes first"
+                  : underMin
+                    ? `Minimum order ${eur(minOrder)}`
+                    : `Pay ${eur(total)} — secured by Stripe`}
             </button>
+            {underMin && (
+              <p style={{ fontSize: 13, color: "#f2a63b", fontWeight: 600, lineHeight: 1.5, margin: 0, textAlign: "center" }}>
+                Add {eur(minOrder - subtotal)} more of guisos or sides to check out.
+              </p>
+            )}
             {error && (
               <p style={{ fontSize: 13, color: "#f2a63b", lineHeight: 1.5, margin: 0, textAlign: "center" }}>
                 {error}
               </p>
             )}
             <p style={{ fontSize: 11, color: "#a1806f", lineHeight: 1.6, margin: 0, textAlign: "center" }}>
-              You are charged now. We confirm your dishes by email on Monday morning, after the
+              You are charged now. We confirm your dishes by email on {settings.cook_day} morning, after the
               market.
             </p>
           </div>
