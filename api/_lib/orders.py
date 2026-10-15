@@ -43,6 +43,15 @@ class CheckoutPayload(BaseModel):
             raise ValueError("Please give us your name.")
         return v
 
+    @field_validator("address")
+    @classmethod
+    def _address_with_number(cls, v: str) -> str:
+        # a street without a house number cannot be delivered to
+        v = v.strip()
+        if len(v) < 3 or not re.search(r"\d", v):
+            raise ValueError("Address needs a street and a house number.")
+        return v
+
     @field_validator("phone")
     @classmethod
     def _dialable_phone(cls, v: str) -> str:
