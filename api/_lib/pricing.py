@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 
+STRIPE_MIN_CENTS = 50  # Stripe's floor for a EUR Checkout Session after discounts
+
+
 class CartError(Exception):
     def __init__(self, message: str):
         self.message = message
@@ -160,4 +163,9 @@ def price_order(lines: list[dict], dishes: list[dict], settings: dict,
     discount = discount_for(packs_cents, grams, settings)
     promo = promo_for(packs_cents - discount, subtotal - discount, settings)
     fee = _cents(settings["order_fee"])
-    return Totals(subtotal, discount, fee, subtotal - discount - promo + fee, items, grams, promo)
+    total = subtotal - discount - promo + fee
+    # Stripe refuses a Checkout Session under €0.50 after coupons. A cheap
+    # cart with an amount-off promo can land there; say so instead of 500ing.
+    if total < STRIPE_MIN_CENTS:
+        raise CartError("The amount to pay is below €0.50 — add a little more to your order.")
+    return Totals(subtotal, discount, fee, total, items, grams, promo)

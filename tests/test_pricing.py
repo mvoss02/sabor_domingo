@@ -296,3 +296,20 @@ def test_min_order_ignores_discounts_and_is_off_at_zero():
     # 0 and missing both mean off
     price_order([line("d2", "s400")], DISHES, {**SETTINGS, "min_order": 0}, sizes=SIZES)
     price_order([line("d2", "s400")], DISHES, SETTINGS, sizes=SIZES)
+
+
+# --- Stripe floor ---------------------------------------------------------------
+
+def test_amount_due_under_stripe_floor_is_refused():
+    cheap = [{"id": "s050", "name": "Test", "grams": 100, "price_classic": 0.5, "price_chef": 0.5}]
+    # 50 cents with a 10% promo = 45 cents due: Stripe would reject it, we say why
+    promo = {**SETTINGS, "order_fee": 0, "promo_active": True, "promo_kind": "percent", "promo_value": 10}
+    with pytest.raises(CartError, match="below €0.50"):
+        price_order([line("d2", "s050")], DISHES, promo, sizes=cheap)
+    # exactly 50 cents due passes
+    t = price_order([line("d2", "s050")], DISHES, {**SETTINGS, "order_fee": 0}, sizes=cheap)
+    assert t.total_cents == 50
+    # an amount-off promo capped at the order value gives €0 due, also refused
+    free = {**SETTINGS, "order_fee": 0, "promo_active": True, "promo_kind": "amount", "promo_value": 5}
+    with pytest.raises(CartError, match="below €0.50"):
+        price_order([line("d2", "s050")], DISHES, free, sizes=cheap)
