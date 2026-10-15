@@ -933,8 +933,7 @@ export default function PackBuilder({
               </p>
             )}
             <p style={{ fontSize: 11, color: "#a1806f", lineHeight: 1.6, margin: 0, textAlign: "center" }}>
-              You are charged now. We confirm your dishes by email on {settings.cook_day} morning, after the
-              market.
+              You are charged now. We confirm your order by email.
             </p>
           </div>
         </div>
