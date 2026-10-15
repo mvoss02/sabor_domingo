@@ -60,6 +60,7 @@ export default function PackBuilder({
   const [lookup, setLookup] = useState<"idle" | "loading" | "found" | "notfound">("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tried, setTried] = useState(false);
 
   const windowOpen = isWindowOpen(settings);
   const dishById = useMemo(() => new Map(dishes.map((d) => [d.id, d])), [dishes]);
@@ -107,7 +108,9 @@ export default function PackBuilder({
   const promo = totalPacks > 0 ? promoFor(packsSubtotal - discount, subtotal - discount, settings) : 0;
   const promoLabel =
     settings.promo_kind === "amount" ? `${eur(Number(settings.promo_value))} promotion` : `${Number(settings.promo_value)}% promotion`;
-  const total = totalPacks > 0 ? subtotal - discount - promo + settings.order_fee : 0;
+  // Honest total as soon as anything is in the cart; a sides-only cart still
+  // cannot be submitted (server rule), the button and hint say why.
+  const total = subtotal > 0 ? subtotal - discount - promo + settings.order_fee : 0;
   const packsLeft = maxPacks > 0 ? maxPacks - totalPacks : Infinity;
   const postalOk = /^\d{4}\s?[A-Za-z]{2}$/.test(form.postal_code.trim());
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim());
@@ -118,7 +121,19 @@ export default function PackBuilder({
   // minimum order: list-price subtotal (guisos + paid sides), before discounts, no fee; mirrors pricing.py
   const minOrder = Number(settings.min_order ?? 0);
   const underMin = minOrder > 0 && totalPacks > 0 && subtotal < minOrder;
-  const canSubmit = windowOpen && totalPacks > 0 && !underMin && !!formComplete && !submitting;
+  // The cart decides whether the button is live; the form is checked on click
+  // so a missing field can say so instead of a silently dead button.
+  const cartOk = windowOpen && totalPacks > 0 && !underMin;
+  const canSubmit = cartOk && !submitting;
+  const missingFields = [
+    !form.name.trim() && "name",
+    !postalOk && "postal code",
+    !form.address.trim() && "address",
+    !phoneOk && "phone",
+    !emailOk && "email",
+  ].filter((f): f is string => !!f);
+  // Set on the first click with an incomplete form; marks the fields until filled.
+  const flag = (ok: boolean) => (tried && !ok ? "#f2a63b" : "#7c3a35");
 
   // Dutch address autofill: postcode + house number -> street via PDOK Locatieserver
   // (free government geocoding API, no key). Failure just leaves manual typing.
@@ -178,6 +193,10 @@ export default function PackBuilder({
   }
 
   async function submit() {
+    if (!formComplete) {
+      setTried(true);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const lines: object[] = Object.entries(cart).map(([key, qty]) => {
@@ -726,7 +745,7 @@ export default function PackBuilder({
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Your name"
-                style={fieldStyle}
+                style={{ ...fieldStyle, borderColor: flag(!!form.name.trim()) }}
               />
             </label>
             <div style={{ display: "flex", gap: 10 }}>
@@ -744,7 +763,7 @@ export default function PackBuilder({
                   placeholder="1015 AB"
                   style={{
                     ...fieldStyle,
-                    borderColor: form.postal_code && !postalOk ? "#f2a63b" : "#7c3a35",
+                    borderColor: form.postal_code && !postalOk ? "#f2a63b" : flag(postalOk),
                   }}
                 />
                 {form.postal_code && !postalOk && (
@@ -775,7 +794,7 @@ export default function PackBuilder({
                 onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
                 placeholder="Fills in from postcode + number"
                 maxLength={500}
-                style={fieldStyle}
+                style={{ ...fieldStyle, borderColor: flag(!!form.address.trim()) }}
               />
               {postalOk && houseNr.trim() !== "" && lookup === "loading" && (
                 <span style={{ display: "block", fontSize: 11.5, color: "#a1806f", marginTop: 5 }}>
@@ -804,7 +823,7 @@ export default function PackBuilder({
                 maxLength={40}
                 style={{
                   ...fieldStyle,
-                  borderColor: form.phone && !phoneOk ? "#f2a63b" : "#7c3a35",
+                  borderColor: form.phone && !phoneOk ? "#f2a63b" : flag(phoneOk),
                 }}
               />
               {form.phone && !phoneOk && (
@@ -824,7 +843,7 @@ export default function PackBuilder({
                 maxLength={200}
                 style={{
                   ...fieldStyle,
-                  borderColor: form.email && !emailOk ? "#f2a63b" : "#7c3a35",
+                  borderColor: form.email && !emailOk ? "#f2a63b" : flag(emailOk),
                 }}
               />
               {form.email && !emailOk && (
@@ -885,15 +904,27 @@ export default function PackBuilder({
             >
               {submitting
                 ? "One moment…"
-                : totalPacks === 0
-                  ? "Pick your dishes first"
-                  : underMin
-                    ? `Minimum order ${eur(minOrder)}`
-                    : `Pay ${eur(total)} — secured by Stripe`}
+                : !windowOpen
+                  ? "Orders are closed"
+                  : totalPacks === 0
+                    ? "Add a guiso to check out"
+                    : underMin
+                      ? `Minimum order ${eur(minOrder)}`
+                      : `Pay ${eur(total)} — secured by Stripe`}
             </button>
+            {windowOpen && totalPacks === 0 && totalExtras > 0 && (
+              <p style={{ fontSize: 13, color: "#f2a63b", fontWeight: 600, lineHeight: 1.5, margin: 0, textAlign: "center" }}>
+                Sides ride along with a pack — pick at least one guiso.
+              </p>
+            )}
             {underMin && (
               <p style={{ fontSize: 13, color: "#f2a63b", fontWeight: 600, lineHeight: 1.5, margin: 0, textAlign: "center" }}>
                 Add {eur(minOrder - subtotal)} more of guisos or sides to check out.
+              </p>
+            )}
+            {tried && missingFields.length > 0 && (
+              <p style={{ fontSize: 13, color: "#f2a63b", fontWeight: 600, lineHeight: 1.5, margin: 0, textAlign: "center" }}>
+                Please fill in your {missingFields.join(", ").replace(/, ([^,]*)$/, " and $1")}.
               </p>
             )}
             {error && (
