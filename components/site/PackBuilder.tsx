@@ -117,7 +117,11 @@ export default function PackBuilder({
   // must start like a real dialable number: +31…, 0031…, or domestic 06…/020…
   const phoneOk = /^(\+[1-9]|00[1-9]|0[1-9])[0-9 \-()]{5,}$/.test(form.phone.trim());
   const emailSuggestion = emailOk ? suggestEmail(form.email.trim()) : null;
-  const formComplete = form.name.trim() && emailOk && form.address.trim() && postalOk && phoneOk;
+  // address must carry a house number (a digit): the lookup composes one in,
+  // and a hand-typed street without a number is not deliverable
+  const houseOk = houseNr.trim() !== "";
+  const addressOk = /\d/.test(form.address);
+  const formComplete = form.name.trim() && emailOk && addressOk && houseOk && postalOk && phoneOk;
   // minimum order: list-price subtotal (guisos + paid sides), before discounts, no fee; mirrors pricing.py
   const minOrder = Number(settings.min_order ?? 0);
   const underMin = minOrder > 0 && totalPacks > 0 && subtotal < minOrder;
@@ -128,7 +132,8 @@ export default function PackBuilder({
   const missingFields = [
     !form.name.trim() && "name",
     !postalOk && "postal code",
-    !form.address.trim() && "address",
+    !houseOk && "house number",
+    !addressOk && "address with house number",
     !phoneOk && "phone",
     !emailOk && "email",
   ].filter((f): f is string => !!f);
@@ -781,7 +786,7 @@ export default function PackBuilder({
                   onChange={(e) => setHouseNr(e.target.value)}
                   placeholder="41-2"
                   maxLength={12}
-                  style={fieldStyle}
+                  style={{ ...fieldStyle, borderColor: flag(houseOk) }}
                 />
               </label>
             </div>
@@ -794,7 +799,7 @@ export default function PackBuilder({
                 onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
                 placeholder="Fills in from postcode + number"
                 maxLength={500}
-                style={{ ...fieldStyle, borderColor: flag(!!form.address.trim()) }}
+                style={{ ...fieldStyle, borderColor: flag(addressOk) }}
               />
               {postalOk && houseNr.trim() !== "" && lookup === "loading" && (
                 <span style={{ display: "block", fontSize: 11.5, color: "#a1806f", marginTop: 5 }}>

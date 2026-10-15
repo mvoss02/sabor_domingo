@@ -268,3 +268,14 @@ def test_junk_phone_and_blank_name_422(monkeypatch):
     resp, _, db = post({**VALID_BODY, "name": "  Ana  "}, OPEN_NOW)
     assert resp.status_code == 200
     assert db.table("orders").insert.call_args.args[0]["name"] == "Ana"
+
+
+def test_address_without_house_number_422(monkeypatch):
+    monkeypatch.setenv("SITE_URL", "http://test.local")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    for address in ["Javastraat", "  ", "Pr"]:
+        resp, _, _ = post({**VALID_BODY, "address": address}, OPEN_NOW)
+        assert resp.status_code == 422, address
+    for address in ["Javastraat 44", "Javastraat 41-2", "1e Helmersstraat 10 III"]:
+        resp, _, _ = post({**VALID_BODY, "address": address}, OPEN_NOW)
+        assert resp.status_code == 200, address
