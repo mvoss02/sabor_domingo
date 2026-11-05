@@ -111,7 +111,8 @@ def subscribe_contact(email: str) -> None:
     resp.raise_for_status()
 
 
-def _send(subject: str, text: str, to: list[str], html: str | None = None) -> None:
+def _send(subject: str, text: str, to: list[str], html: str | None = None,
+          reply_to: str | None = None) -> None:
     payload = {
         "sender": {"name": "Sabor Domingo", "email": env("EMAIL_FROM")},
         "to": [{"email": addr} for addr in to],
@@ -120,6 +121,10 @@ def _send(subject: str, text: str, to: list[str], html: str | None = None) -> No
     }
     if html:
         payload["htmlContent"] = html
+    if reply_to:
+        # Where the recipient's Reply button points. Without it a reply goes
+        # to the sender (EMAIL_FROM), which nobody reads.
+        payload["replyTo"] = {"email": reply_to}
     resp = httpx.post(
         BREVO_URL,
         headers={"api-key": env("BREVO_API_KEY"), "accept": "application/json"},
@@ -250,9 +255,26 @@ def send_refund_email(order: dict, amount: float, full: bool) -> None:
 def send_inquiry_notification(inquiry: dict) -> None:
     _send(
         subject=f"Event inquiry — {inquiry['name']} ({inquiry['type']})",
+        # No angle brackets around the address: a text-only mail gets turned
+        # into HTML by Brevo, where "<anna@example.com>" is read as a tag and
+        # vanishes. We also send our own HTML below, with every value escaped.
         text=(
-            f"{inquiry['name']} <{inquiry['email']}>\nType: {inquiry['type']}\n"
+            f"{inquiry['name']}\nEmail: {inquiry['email']}\nType: {inquiry['type']}\n"
             f"Guests: {inquiry.get('guests') or '—'}\n\n{inquiry.get('message') or ''}"
+            f"\n\nReply to this email to answer {inquiry['name']} directly."
         ),
         to=_admins(),
+        reply_to=inquiry["email"],
+        html=_html_wrap(
+            f'<h1 style="font-size:20px;color:#5e1d22;margin:0 0 12px;">Event inquiry</h1>'
+            f'<p style="margin:0 0 14px;">'
+            f'<strong>{_esc(inquiry["name"])}</strong> &middot; '
+            f'<a href="mailto:{_esc(inquiry["email"])}" style="color:#c8492a;">{_esc(inquiry["email"])}</a><br>'
+            f'Type: <strong>{_esc(inquiry["type"])}</strong><br>'
+            f'Guests: {_esc(inquiry.get("guests") or "—")}</p>'
+            f'<p style="margin:0 0 18px;padding:12px 14px;background:#f6eee0;border-radius:10px;">'
+            f'{_esc(inquiry.get("message")).replace(chr(10), "<br>") or "—"}</p>'
+            f'<p style="margin:0;font-size:13.5px;color:#6a4a3f;">'
+            f'Reply to this email to answer {_esc(inquiry["name"])} directly.</p>'
+        ),
     )

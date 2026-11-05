@@ -163,3 +163,51 @@ def test_storage_note_comes_from_settings_with_a_default(monkeypatch):
     with patch.object(emails, "_send") as send:
         emails.send_order_emails(ORDER, ITEMS, storage_note="   ")  # blank in admin
         assert emails.DEFAULT_STORAGE_NOTE + "." in send.call_args_list[0].kwargs["text"]
+
+
+INQUIRY = {"name": "Anna", "email": "anna@example.com", "type": "Office lunch",
+           "guests": "20", "message": "Lunch for the team?"}
+
+
+def test_inquiry_notification_replies_to_the_enquirer(monkeypatch):
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com,clau@x.com")
+    with patch.object(emails, "_send") as send:
+        emails.send_inquiry_notification(INQUIRY)
+        kwargs = send.call_args.kwargs
+        assert set(kwargs["to"]) == {"maca@x.com", "clau@x.com"}
+        assert kwargs["reply_to"] == "anna@example.com"
+        assert "Reply to this email to answer Anna directly." in kwargs["text"]
+
+
+def test_send_sets_reply_to_only_when_given(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    with patch.object(emails.httpx, "post") as post:
+        post.return_value = MagicMock(status_code=201)
+        emails._send(subject="Hi", text="Body", to=["a@b.c"], reply_to="anna@example.com")
+        assert post.call_args.kwargs["json"]["replyTo"] == {"email": "anna@example.com"}
+        emails._send(subject="Hi", text="Body", to=["a@b.c"])
+        assert "replyTo" not in post.call_args.kwargs["json"]
+
+
+def test_inquiry_notification_shows_the_address_in_both_bodies(monkeypatch):
+    # Regression: the text used to read "Anna <anna@example.com>" and the mail
+    # had no HTML part, so the address was swallowed as an unknown HTML tag.
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
+    with patch.object(emails, "_send") as send:
+        emails.send_inquiry_notification(INQUIRY)
+        kwargs = send.call_args.kwargs
+        assert "Email: anna@example.com" in kwargs["text"]
+        assert "<anna@example.com>" not in kwargs["text"]
+        assert ">anna@example.com</a>" in kwargs["html"]
+
+
+def test_inquiry_notification_escapes_visitor_input_in_html(monkeypatch):
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
+    hostile = {**INQUIRY, "name": "<b>Anna</b>", "message": "line one\n<script>x</script>"}
+    with patch.object(emails, "_send") as send:
+        emails.send_inquiry_notification(hostile)
+        html = send.call_args.kwargs["html"]
+        assert "<b>Anna</b>" not in html and "&lt;b&gt;Anna&lt;/b&gt;" in html
+        assert "<script>" not in html
+        assert "line one<br>&lt;script&gt;" in html
