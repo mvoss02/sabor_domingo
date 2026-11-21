@@ -148,6 +148,23 @@ def test_discount_line_only_when_granted(monkeypatch):
     assert "&minus;&euro;2.66" in html
 
 
+def test_promotion_code_line_and_total_is_the_charge(monkeypatch):
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")
+    monkeypatch.setenv("ADMIN_EMAILS", "maca@x.com")
+    with patch.object(emails, "_send") as send:
+        emails.send_order_emails({**ORDER, "amount_paid": 80.55}, ITEMS)
+        text = send.call_args_list[0].kwargs["text"]
+        html = send.call_args_list[0].kwargs["html"]
+        admin_text = send.call_args_list[1].kwargs["text"]
+    assert "Discount code: −€8.95" in text and "Total: €80.55" in text
+    assert "Total: €89.50" not in text
+    assert "&minus;&euro;8.95" in html and "&euro;80.55" in html
+    assert "Total: €80.55" in admin_text
+    # paid exactly the quote: no code line
+    assert emails._code({**ORDER, "amount_paid": 89.5}) == 0
+
+
 def test_storage_note_comes_from_settings_with_a_default(monkeypatch):
     monkeypatch.setenv("BREVO_API_KEY", "xkeysib-test")
     monkeypatch.setenv("EMAIL_FROM", "hola@sabordomingo.test")

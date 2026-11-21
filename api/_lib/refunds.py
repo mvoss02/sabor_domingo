@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from api._lib.config import env
 from api._lib.db import get_client
+from api._lib.pricing import amount_paid
 
 
 class RefundPayload(BaseModel):
@@ -50,7 +51,9 @@ def refund_order(order_id: str, payload: RefundPayload, by: str = "") -> dict:
     if not intent:
         raise RefundError("No Stripe payment is linked to this order.")
 
-    total_c = cents(order["total"])
+    # The charge, not our quote: a promotion code makes Stripe charge less
+    # than `total`, and Stripe refuses a refund larger than the charge.
+    total_c = cents(amount_paid(order))
     done_c = cents(order.get("refunded_total"))
     remaining_c = total_c - done_c
     if remaining_c <= 0:

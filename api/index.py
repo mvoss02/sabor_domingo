@@ -9,7 +9,7 @@ from api._lib.config import env
 from api._lib.db import get_client
 from api._lib.emails import send_inquiry_notification, subscribe_contact
 from api._lib.orders import CheckoutPayload, WindowClosed, create_checkout
-from api._lib.pricing import CartError
+from api._lib.pricing import CartError, amount_paid
 from api._lib.refunds import OrderNotFound, RefundError, RefundPayload, refund_order
 from api._lib.webhook import handle_event
 
@@ -90,10 +90,12 @@ def admin_refund(order_id: str, payload: RefundPayload, admin: str = Depends(req
 @app.get("/api/py/order-status")
 def order_status(session_id: str):
     rows = (get_client().table("orders")
-            .select("status, ref_num, delivery_day, total")
+            .select("status, ref_num, delivery_day, total, amount_paid")
             .eq("stripe_session_id", session_id).execute().data)
     if not rows:
         raise HTTPException(status_code=404, detail="Order not found")
     o = rows[0]
+    # "total" here means what the customer sees as their price: the charge
+    # once paid (after any promotion code), our quote before that.
     return {"status": o["status"], "ref": f"#SD-{o['ref_num']}",
-            "delivery_day": o["delivery_day"], "total": o["total"]}
+            "delivery_day": o["delivery_day"], "total": amount_paid(o)}

@@ -177,12 +177,27 @@ export interface Order {
   discount: number;
   promo_discount: number;
   fee: number;
+  /** Our quoted price at checkout, frozen. */
   total: number;
+  /** What Stripe charged (after any promotion code). Null until paid. Read via paidOf(). */
+  amount_paid: number | null;
   refunded_total: number;
   stripe_payment_intent: string | null;
   created_at: string;
   order_items: OrderItem[];
   order_refunds?: OrderRefund[];
+}
+
+/** What the customer was actually charged. amount_paid is null until the
+ *  webhook marks the order paid; before that (and for every order without a
+ *  promotion code) the charge equals our quoted total. */
+export function paidOf(o: Pick<Order, "amount_paid" | "total">): number {
+  return Number(o.amount_paid ?? o.total);
+}
+
+/** The Stripe promotion code's discount: quote minus charge, 0 without a code. */
+export function codeDiscountOf(o: Pick<Order, "amount_paid" | "total">): number {
+  return Math.max(0, Math.round((Number(o.total) - paidOf(o)) * 100) / 100);
 }
 
 export interface HeroContent {

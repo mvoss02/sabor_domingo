@@ -5,6 +5,7 @@ from decimal import Decimal
 import httpx
 
 from api._lib.config import env
+from api._lib.pricing import amount_paid
 from api._lib.window import DAYS
 
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
@@ -52,12 +53,21 @@ def _promo(order: dict) -> float:
     return float(order.get("promo_discount") or 0)
 
 
+def _code(order: dict) -> float:
+    """A Stripe promotion code typed in Checkout: the gap between our quoted
+    total and what Stripe charged. 0 when no code was used."""
+    gap = Decimal(str(order["total"])) - Decimal(str(amount_paid(order)))
+    return float(max(gap, Decimal(0)))
+
+
 def _totals_text(order: dict) -> str:
     d = _discount(order)
     p = _promo(order)
+    c = _code(order)
     line = f"Discount: −€{_eur(d)}\n" if d > 0 else ""
     line += f"Promotion: −€{_eur(p)}\n" if p > 0 else ""
-    return f"{line}Total: €{_eur(order['total'])}"
+    line += f"Discount code: −€{_eur(c)}\n" if c > 0 else ""
+    return f"{line}Total: €{_eur(amount_paid(order))}"
 
 
 def _totals_html(order: dict) -> str:
@@ -67,11 +77,12 @@ def _totals_html(order: dict) -> str:
             f'<td style="text-align:right;font-size:14px;color:#2e6b3e;">&minus;&euro;{_eur(amount)}</td></tr>'
             if amount > 0 else ""
         )
-    disc = row("Discount", _discount(order)) + row("Promotion", _promo(order))
+    disc = (row("Discount", _discount(order)) + row("Promotion", _promo(order))
+            + row("Discount code", _code(order)))
     return (
         f'<table style="width:100%;border-collapse:collapse;margin-top:10px;">{disc}<tr>'
         f'<td style="font-weight:600;font-size:15px;color:#5e1d22;">Total</td>'
-        f'<td style="text-align:right;font-weight:700;font-size:20px;color:#c8492a;">&euro;{_eur(order["total"])}</td>'
+        f'<td style="text-align:right;font-weight:700;font-size:20px;color:#c8492a;">&euro;{_eur(amount_paid(order))}</td>'
         f'</tr></table>'
     )
 

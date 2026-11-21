@@ -41,6 +41,14 @@ def _cents(euros) -> int:
     return int(round(float(euros) * 100))
 
 
+def amount_paid(order: dict):
+    """What Stripe actually charged for an order row (migration 0020). Null
+    until the webhook marks it paid, so fall back to our quoted `total`,
+    which is exactly what every order without a promotion code was charged."""
+    paid = order.get("amount_paid")
+    return order["total"] if paid is None else paid
+
+
 def discount_for(packs_cents: int, grams: int, settings: dict) -> int:
     """Grams-based discount on the guisos subtotal only: strictly more than
     the threshold earns `discount_pct` percent, rounded half up to the cent.

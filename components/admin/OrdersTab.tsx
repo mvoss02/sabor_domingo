@@ -5,6 +5,7 @@ import { adminCard, adminChip, adminInput, adminLabel } from "@/components/admin
 import OrderCard from "@/components/admin/OrderCard";
 import { DAY_ORDER, addDays, amsToday, cookDateFor, deliveryDate, eur, fmtDate, isWindowOpen, weekdayIdx } from "@/lib/window";
 import type { Order, Settings } from "@/lib/types";
+import { paidOf } from "@/lib/types";
 
 type View = { mode: "cycle"; cook: string } | { mode: "range"; from: string; to: string } | { mode: "all" };
 
@@ -162,7 +163,7 @@ export default function OrdersTab() {
 
   const totalGrams = paidInView.reduce((n, o) => n + grams(o), 0);
   // Net of partial refunds: what the kitchen actually keeps for this view.
-  const revenue = paidInView.reduce((n, o) => n + Number(o.total) - Number(o.refunded_total ?? 0), 0);
+  const revenue = paidInView.reduce((n, o) => n + paidOf(o) - Number(o.refunded_total ?? 0), 0);
 
   function replaceOrder(u: Order) {
     setRawOrders((prev) => prev.map((x) => (x.id === u.id ? u : x)));

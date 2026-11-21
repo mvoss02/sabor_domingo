@@ -5,8 +5,10 @@ from api._lib import webhook
 
 
 def event(kind, session_id="cs_123", payment_intent="pi_1", payment_status="paid",
-          order_id="order-uuid-1"):
+          order_id="order-uuid-1", amount_total=None):
     obj = {"id": session_id, "payment_intent": payment_intent}
+    if amount_total is not None:
+        obj["amount_total"] = amount_total
     if order_id is not None:
         obj["metadata"] = {"order_id": order_id}
     if payment_status is not None:
@@ -51,6 +53,43 @@ def test_completed_marks_paid_and_fires_email():
          patch.object(webhook, "on_order_paid") as hook:
         assert webhook.handle_event(event("checkout.session.completed")) == "paid"
         hook.assert_called_once()
+
+
+def test_paid_records_what_stripe_charged():
+    """A promotion code makes Stripe charge less than our total; the charge
+    lands as amount_paid in the same guarded update that flips the status."""
+    db = db_returning([{"id": "order-uuid-1", "ref_num": 241, "email": "a@b.c"}])
+    with patch.object(webhook, "get_client", return_value=db), \
+         patch.object(webhook, "on_order_paid"):
+        webhook.handle_event(event("checkout.session.completed", amount_total=3780))
+    patch_ = db.table.return_value.update.call_args.args[0]
+    assert patch_ == {"status": "paid", "stripe_payment_intent": "pi_1", "amount_paid": 37.8}
+
+
+def test_paid_without_amount_total_leaves_amount_paid_unset():
+    db = db_returning([{"id": "order-uuid-1"}])
+    with patch.object(webhook, "get_client", return_value=db), \
+         patch.object(webhook, "on_order_paid"):
+        webhook.handle_event(event("checkout.session.completed"))
+    assert "amount_paid" not in db.table.return_value.update.call_args.args[0]
+
+
+def test_free_order_records_zero_paid():
+    """A 100% code: Stripe charges nothing and says no_payment_required."""
+    db = db_returning([{"id": "order-uuid-1"}])
+    with patch.object(webhook, "get_client", return_value=db), \
+         patch.object(webhook, "on_order_paid"):
+        result = webhook.handle_event(event("checkout.session.completed", payment_intent=None,
+                                            payment_status="no_payment_required", amount_total=0))
+    assert result == "paid"
+    assert db.table.return_value.update.call_args.args[0]["amount_paid"] == 0
+
+
+def test_cancel_does_not_touch_amount_paid():
+    db = db_returning([{"id": "order-uuid-1"}])
+    with patch.object(webhook, "get_client", return_value=db):
+        webhook.handle_event(event("checkout.session.expired", amount_total=3780))
+    assert db.table.return_value.update.call_args.args[0] == {"status": "cancelled"}
 
 
 def test_completed_twice_is_idempotent():
