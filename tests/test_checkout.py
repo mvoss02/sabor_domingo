@@ -115,8 +115,10 @@ def test_happy_path_returns_stripe_url(monkeypatch):
     # total: 29.50 (chef, El Grande) + 4 fee, in cents, across line items
     amounts = [li["price_data"]["unit_amount"] * li["quantity"] for li in kwargs["line_items"]]
     assert sum(amounts) == 3350
-    # 750 g is under the 2 kg threshold: no coupon, no discount on the order
-    assert kwargs["discounts"] == []
+    # 750 g is under the 2 kg threshold: no coupon, no discount on the order,
+    # so the one discount slot is left for a Stripe promotion code
+    assert "discounts" not in kwargs
+    assert kwargs["allow_promotion_codes"] is True
     assert not sc.coupon_create.called
     assert db.table("orders").insert.call_args.args[0]["discount"] == 0
     # order is inserted explicitly as pending_payment, not left to an
@@ -213,6 +215,8 @@ def test_grams_discount_becomes_a_stripe_coupon(monkeypatch):
     coupon_kwargs = sc.coupon_create.call_args.kwargs
     assert (coupon_kwargs["amount_off"], coupon_kwargs["currency"], coupon_kwargs["duration"]) == (expected, "eur", "once")
     assert sc.call_args.kwargs["discounts"] == [{"coupon": "coupon_1"}]
+    # our coupon takes the session's only discount slot: no code box on top
+    assert "allow_promotion_codes" not in sc.call_args.kwargs
     # line items still carry full prices; the coupon does the subtracting
     amounts = [li["price_data"]["unit_amount"] * li["quantity"] for li in sc.call_args.kwargs["line_items"]]
     assert sum(amounts) == packs + 400

@@ -35,7 +35,15 @@ def _transition(client, obj: dict, new_status: str, from_status: str = "pending_
     Falls back to the old stripe_session_id match when metadata.order_id is
     missing (defensive, for events not created by our own checkout flow).
     """
-    extra = {"stripe_payment_intent": obj.get("payment_intent")} if new_status == "paid" else {}
+    extra: dict = {}
+    if new_status == "paid":
+        extra["stripe_payment_intent"] = obj.get("payment_intent")
+        # What Stripe actually charged, after any promotion code typed in
+        # Checkout. Same guarded update as the status, so an order is never
+        # 'paid' without it. Missing amount_total leaves it null; readers
+        # fall back to `total`.
+        if obj.get("amount_total") is not None:
+            extra["amount_paid"] = int(obj["amount_total"]) / 100
     order_id = (obj.get("metadata") or {}).get("order_id")
 
     if order_id:

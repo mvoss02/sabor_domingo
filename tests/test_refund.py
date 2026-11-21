@@ -121,6 +121,26 @@ def test_second_partial_refund_completes(monkeypatch, as_admin):
     assert (body["status"], body["refunded_total"], body["refunded_now"]) == ("refunded", 89.5, 9.5)
 
 
+def test_full_refund_after_promotion_code_returns_the_charge_not_the_quote(monkeypatch, as_admin):
+    """89.50 quoted, a code made Stripe charge 80.55. Asking Stripe for 89.50
+    back would be refused (more than the charge)."""
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    db, q = db_with([{**PAID, "amount_paid": 80.55}])
+    resp, create, _ = post("order-uuid-1", {}, db)
+    assert resp.status_code == 200, resp.text
+    assert create.call_args.kwargs["amount"] == 8055
+    assert q.update.call_args.args[0] == {"refunded_total": 80.55, "status": "refunded"}
+
+
+def test_refund_over_the_charge_400(monkeypatch, as_admin):
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    db, _ = db_with([{**PAID, "amount_paid": 80.55}])
+    resp, create, _ = post("order-uuid-1", {"amount": 89.5}, db)
+    assert resp.status_code == 400
+    assert "€80.55" in resp.json()["detail"]
+    create.assert_not_called()
+
+
 def test_amount_over_remaining_400(monkeypatch, as_admin):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
     db, _ = db_with([{**PAID, "refunded_total": 80.0}])

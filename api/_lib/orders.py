@@ -111,11 +111,15 @@ def create_checkout(payload: CheckoutPayload) -> str:
     stripe.api_key = env("STRIPE_SECRET_KEY")
     site = env("SITE_URL")
     try:
-        # Stripe Checkout has no negative line items and takes a single coupon
-        # per session, so the grams discount and the promotion travel as one
-        # one-off coupon worth exactly what price_order computed. They stay
-        # two columns on the order for the admin and the emails.
-        discounts = []
+        # Stripe Checkout has no negative line items and takes a single
+        # discount per session, so the grams discount and the promotion travel
+        # as one one-off coupon worth exactly what price_order computed. They
+        # stay two columns on the order for the admin and the emails.
+        # Without that coupon the slot is free: the customer may type a Stripe
+        # promotion code (SABOR10). Stripe then charges less than `total`, and
+        # the webhook records the real charge as amount_paid. Stripe enforces
+        # the code's expiry and redemption limits; a code never stacks on ours.
+        discount_args: dict = {"allow_promotion_codes": True}
         off_cents = totals.discount_cents + totals.promo_cents
         if off_cents > 0:
             names = []
@@ -127,10 +131,10 @@ def create_checkout(payload: CheckoutPayload) -> str:
                 amount_off=off_cents, currency="eur", duration="once",
                 name=" + ".join(names),
             )
-            discounts = [{"coupon": coupon.id}]
+            discount_args = {"discounts": [{"coupon": coupon.id}]}
         session = stripe.checkout.Session.create(
             mode="payment",
-            discounts=discounts,
+            **discount_args,
             customer_email=payload.email,
             # €0 extras ("included") are kept on the order but not sent to
             # Stripe as line items.

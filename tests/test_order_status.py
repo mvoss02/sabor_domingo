@@ -27,6 +27,14 @@ def test_found():
                            "delivery_day": "Monday", "total": 89.5}
 
 
+def test_paid_shows_the_charge_after_a_promotion_code():
+    rows = [{"status": "paid", "ref_num": 241, "delivery_day": "Monday",
+             "total": 89.5, "amount_paid": 80.55}]
+    with patch.object(index, "get_client", return_value=db_with(rows)):
+        resp = TestClient(app).get("/api/py/order-status?session_id=cs_1")
+    assert resp.json()["total"] == 80.55
+
+
 def test_unknown_404():
     with patch.object(index, "get_client", return_value=db_with([])):
         resp = TestClient(app).get("/api/py/order-status?session_id=cs_nope")

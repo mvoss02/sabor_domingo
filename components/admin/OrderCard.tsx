@@ -3,7 +3,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { adminButton, adminCard, adminInput, adminLabel } from "@/components/admin/ui";
 import { deliveryDate, eur, fmtDate } from "@/lib/window";
-import { lineLabel } from "@/lib/types";
+import { codeDiscountOf, lineLabel, paidOf } from "@/lib/types";
 import type { Order, OrderItem, Settings } from "@/lib/types";
 
 const STATUS_LABEL: Record<string, string> = { pending_payment: "pending" };
@@ -51,7 +51,9 @@ export default function OrderCard({
   const badge = badgeColors[o.status] ?? badgeColors.cancelled;
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${o.address}, ${o.postal_code} Amsterdam`)}`;
   const refunded = Number(o.refunded_total ?? 0);
-  const remaining = round2(Number(o.total) - refunded);
+  const paid = paidOf(o);
+  const codeOff = codeDiscountOf(o);
+  const remaining = round2(paid - refunded);
   const canAct = o.status === "paid";
   const inactive = o.status === "refunded" || o.status === "cancelled";
   const refunds = [...(o.order_refunds ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -87,13 +89,14 @@ export default function OrderCard({
         <div style={{ marginLeft: "auto", textAlign: "right", fontSize: 13, lineHeight: 1.45, color: "#5e1d22" }}>
           {refunded > 0 ? (
             <>
-              <div style={{ color: "#a1806f" }}>paid {eur(o.total)}</div>
+              <div style={{ color: "#a1806f" }}>paid {eur(paid)}</div>
               <div style={{ color: "#c8492a", fontWeight: 600 }}>− {eur(refunded)} refunded</div>
               <div style={{ fontWeight: 700, fontSize: 17 }}>{eur(remaining)} kept</div>
             </>
           ) : (
-            <div style={{ fontWeight: 700, fontSize: 17 }}>{eur(o.total)}</div>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>{eur(paid)}</div>
           )}
+          {codeOff > 0 && <div style={{ color: "#a1806f" }}>incl. {eur(codeOff)} discount code</div>}
         </div>
       </div>
 
@@ -224,15 +227,17 @@ function EditPanel({
   const [refundFee, setRefundFee] = useState(false);
 
   const fee = Number(o.fee);
-  // The grams discount was granted at checkout and stays as paid: edits
-  // settle the difference in lines, they never re-run the discount rule.
-  const discount = Number(o.discount ?? 0) + Number(o.promo_discount ?? 0);
+  // The grams discount, promotion and any discount code were granted at
+  // checkout and stay as paid: edits settle the difference in lines, they
+  // never re-run the discount rule.
+  const paid = paidOf(o);
+  const discount = Number(o.discount ?? 0) + Number(o.promo_discount ?? 0) + codeDiscountOf(o);
   const packsValue = round2(items.reduce((n, i) => n + i.qty * Number(i.unit_price), 0));
   const itemsTotal = round2(Math.max(0, packsValue - discount) + fee);
   const packsReduced = items.some((i) => i.qty < (o.order_items.find((x) => x.id === i.id)?.qty ?? 0));
   const alreadyRefunded = Number(o.refunded_total ?? 0);
   // What the customer should end up having paid vs what they actually did.
-  const diff = round2(Number(o.total) - alreadyRefunded - itemsTotal + (refundFee ? fee : 0));
+  const diff = round2(paid - alreadyRefunded - itemsTotal + (refundFee ? fee : 0));
 
   function setQty(id: string, qty: number) {
     setItems((xs) => xs.map((i) => (i.id === id ? { ...i, qty: Math.max(0, qty) } : i)));
@@ -334,7 +339,7 @@ function EditPanel({
       )}
 
       <div style={{ fontSize: 13.5, color: "#5e1d22" }}>
-        New order value <strong>{eur(itemsTotal)}</strong> (incl. {eur(fee)} fee{discount > 0 && <>, {eur(discount)} discount kept</>}) · paid {eur(Number(o.total))}
+        New order value <strong>{eur(itemsTotal)}</strong> (incl. {eur(fee)} fee{discount > 0 && <>, {eur(discount)} discount kept</>}) · paid {eur(paid)}
         {alreadyRefunded > 0 && <> · already refunded {eur(alreadyRefunded)}</>}
         {diff > 0 && (
           <span style={{ color: "#c8492a", fontWeight: 600 }}> · {eur(diff)} to refund after saving</span>
@@ -486,7 +491,7 @@ function RefundPanel({
   return (
     <div style={{ borderTop: "1px solid #ece0cb", paddingTop: 12, marginTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 13.5, color: "#5e1d22" }}>
-        Paid <strong>{eur(Number(o.total))}</strong>
+        Paid <strong>{eur(paidOf(o))}</strong>
         {Number(o.refunded_total) > 0 && <> · refunded {eur(Number(o.refunded_total))}</>} · up to{" "}
         <strong>{eur(remaining)}</strong> can go back. Money returns to the card via Stripe, usually within 5–10 business days.
       </div>
